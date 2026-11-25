@@ -4,6 +4,7 @@ import type {
   JavaCandidate,
   JavaCheckResult,
   LaunchResult,
+  LoaderInstallResult,
   MinecraftAccount,
   PrimeApi,
   PrimeConfig,
@@ -28,6 +29,8 @@ const api: PrimeApi = {
   listJava: () => ipcRenderer.invoke('prime:java:list') as Promise<JavaCandidate[]>,
   checkJava: (path) => ipcRenderer.invoke('prime:java:check', path) as Promise<JavaCheckResult>,
   launch: (versionId) => ipcRenderer.invoke('prime:launch', versionId) as Promise<LaunchResult>,
+  installLoader: (kind, gameVersion) =>
+    ipcRenderer.invoke('prime:loader:install', kind, gameVersion) as Promise<LoaderInstallResult>,
   kill: () => ipcRenderer.invoke('prime:kill') as Promise<boolean>,
   openPath: (path) => ipcRenderer.invoke('prime:open', path) as Promise<void>,
   openExternal: (url) => ipcRenderer.invoke('prime:external', url) as Promise<void>,

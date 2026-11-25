@@ -12,6 +12,7 @@ import {
 } from './auth';
 import { discoverJava, verifyJava } from './java';
 import { listVersions } from './install';
+import { installLoader, type LoaderKind } from './loaders';
 import { launch, type LaunchHandle } from './launch';
 import { loadConfig, saveConfig } from './store';
 import { checkForUpdates } from './update';
@@ -91,6 +92,28 @@ ipcMain.handle('prime:config:set', (_event, patch: Partial<PrimeConfig>) => save
 ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
+
+ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
+  if (kind !== 'fabric' && kind !== 'forge') return { ok: false, error: 'Unknown loader.' };
+  if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
+  const rootDir = minecraftRoot();
+  const log = (line: string) => send('prime:log', line);
+  try {
+    const installed = await installLoader(
+      kind,
+      gameVersion,
+      rootDir,
+      (event: ProgressEvent) => send('prime:progress', event),
+      log,
+    );
+    saveConfig({ versionId: installed.versionId });
+    return { ok: true, versionId: installed.versionId };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    send('prime:log', `[prime] ${kind} install failed: ${message}`);
+    return { ok: false, error: message };
+  }
+});
 
 ipcMain.handle('prime:dir:default', () => minecraftRoot());
 

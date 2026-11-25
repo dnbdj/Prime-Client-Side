@@ -89,6 +89,12 @@ export function buildCommand(
     clientid: '',
     user_type: auth ? 'msa' : 'legacy',
     version_type: version.type,
+    resolution_width: '854',
+    resolution_height: '480',
+    quickPlayPath: join(gameDir, 'quickPlay', 'quickPlay.log'),
+    quickPlaySingleplayer: '',
+    quickPlayMultiplayer: '',
+    quickPlayRealms: '',
     natives_directory: nativesDir,
     launcher_name: 'prime',
     launcher_version: '0.1.0',
@@ -97,8 +103,11 @@ export function buildCommand(
     library_directory: join(rootDir, 'libraries'),
   };
 
+  // Launcher placeholders are case-insensitive: Forge and Fabric both use forms
+  // like ${library_directory} and ${version_name} that must resolve here.
+  const lowerVars = new Map(Object.entries(vars).map(([key, value]) => [key.toLowerCase(), value]));
   const substitute = (value: string) =>
-    value.replace(/\$\{([a-z_]+)\}/gi, (whole, key: string) => vars[key] ?? whole);
+    value.replace(/\$\{([A-Za-z0-9_]+)\}/g, (whole, key: string) => lowerVars.get(key.toLowerCase()) ?? whole);
 
   let jvm = flatten(version.arguments?.jvm, features);
   if (!jvm.includes('-cp') && !jvm.some((arg) => arg.includes('${classpath}'))) {

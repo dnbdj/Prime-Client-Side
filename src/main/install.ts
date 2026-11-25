@@ -16,6 +16,10 @@ export type ArgEntry = string | { rules?: Rule[]; value: string | string[] };
 
 export type Library = {
   name: string;
+  /** Maven repository for `name`; absent means Mojang's library host. */
+  url?: string;
+  sha1?: string;
+  size?: number;
   downloads?: { artifact?: Artifact; classifiers?: Record<string, Artifact> };
   natives?: Record<string, string>;
   rules?: Rule[];
@@ -32,6 +36,11 @@ export type VersionJson = {
   libraries?: Library[];
   arguments?: { game?: ArgEntry[]; jvm?: ArgEntry[] };
   minecraftArguments?: string;
+  /** Vanilla version a loader profile builds on. */
+  inheritsFrom?: string;
+  releaseTime?: string;
+  /** Set on profiles Prime installed itself. */
+  primeLoader?: 'fabric' | 'forge';
 };
 
 type Manifest = {
@@ -59,6 +68,29 @@ function toSummaries(manifest: Manifest): VersionSummary[] {
   return manifest.versions.map(({ id, type, releaseTime }) => ({ id, type, releaseTime }));
 }
 
+/** Loader profiles Prime installed itself, which no manifest lists. */
+async function localSummaries(rootDir?: string): Promise<VersionSummary[]> {
+  if (!rootDir) return [];
+  let entries: string[] = [];
+  try {
+    entries = await fs.readdir(join(rootDir, 'versions'));
+  } catch {
+    return [];
+  }
+  const found: VersionSummary[] = [];
+  for (const id of entries) {
+    const version = await readLocalVersion(rootDir, id);
+    if (!version?.primeLoader) continue;
+    found.push({
+      id: version.id ?? id,
+      type: version.type ?? 'release',
+      releaseTime: version.releaseTime ?? new Date(0).toISOString(),
+      loader: version.primeLoader,
+    });
+  }
+  return found.sort((a, b) => b.releaseTime.localeCompare(a.releaseTime));
+}
+
 /**
  * Fetches the version manifest, keeping a copy on disk so the version list
  * still loads when the network (or just Mojang) is unavailable.
@@ -71,16 +103,18 @@ export async function listVersions(rootDir?: string): Promise<VersionSummary[]> 
       await fs.mkdir(rootDir as string, { recursive: true });
       await fs.writeFile(cachePath, JSON.stringify(manifest)).catch(() => undefined);
     }
-    return toSummaries(manifest);
+    return [...(await localSummaries(rootDir)), ...toSummaries(manifest)];
   } catch (error) {
+    const installed = await localSummaries(rootDir);
     if (cachePath) {
       try {
         const cached = JSON.parse(await fs.readFile(cachePath, 'utf8')) as Manifest;
-        return toSummaries(cached);
+        return [...installed, ...toSummaries(cached)];
       } catch {
-        // No usable cache: surface the original network error.
+        // No usable cache: fall back to whatever is installed locally.
       }
     }
+    if (installed.length > 0) return installed;
     throw error;
   }
 }
@@ -92,13 +126,13 @@ export async function fetchVersion(versionId: string): Promise<VersionJson> {
   return fetchJson<VersionJson>(summary.url);
 }
 
-function mavenArtifact(name: string): Artifact | null {
+function mavenArtifact(name: string, baseUrl = LIBRARIES_URL): Artifact | null {
   const [group, artifact, version, classifier] = name.split(':');
   if (!group || !artifact || !version) return null;
   const path = `${group.replace(/\./g, '/')}/${artifact}/${version}/${artifact}-${version}${
     classifier ? `-${classifier}` : ''
   }.jar`;
-  return { path, sha1: '', size: 0, url: `${LIBRARIES_URL}/${path}` };
+  return { path, sha1: '', size: 0, url: `${baseUrl.replace(/\/$/, '')}/${path}` };
 }
 
 function extractNatives(jarPath: string, outDir: string): void {
@@ -116,6 +150,71 @@ function needsDownload(dest: string): boolean {
   return !existsSync(dest);
 }
 
+async function readLocalVersion(rootDir: string, versionId: string): Promise<VersionJson | null> {
+  for (const name of [`${versionId}.json`, 'version.json']) {
+    const file = join(rootDir, 'versions', versionId, name);
+    if (!existsSync(file)) continue;
+    try {
+      return JSON.parse(await fs.readFile(file, 'utf8')) as VersionJson;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Installed profile first, then Mojang's manifest. */
+export async function readVersion(versionId: string, rootDir: string): Promise<VersionJson> {
+  return (await readLocalVersion(rootDir, versionId)) ?? fetchVersion(versionId);
+}
+
+export type ResolvedVersion = {
+  version: VersionJson;
+  /** Version that owns the client jar (the vanilla root of an inheriting profile). */
+  clientId: string;
+};
+
+function mergeVersions(child: VersionJson, parent: VersionJson): VersionJson {
+  const libraries = new Map<string, Library>();
+  for (const library of [...(parent.libraries ?? []), ...(child.libraries ?? [])]) {
+    // A loader may override a vanilla library; the child wins, like the vanilla launcher.
+    libraries.set(library.name, library);
+  }
+  return {
+    id: child.id,
+    type: child.type ?? parent.type,
+    mainClass: child.mainClass ?? parent.mainClass,
+    assets: child.assets ?? parent.assets,
+    assetIndex: child.assetIndex ?? parent.assetIndex,
+    downloads: child.downloads ?? parent.downloads,
+    javaVersion: child.javaVersion ?? parent.javaVersion,
+    libraries: [...libraries.values()],
+    arguments: {
+      game: [...(parent.arguments?.game ?? []), ...(child.arguments?.game ?? [])],
+      jvm: [...(parent.arguments?.jvm ?? []), ...(child.arguments?.jvm ?? [])],
+    },
+    minecraftArguments: child.minecraftArguments ?? parent.minecraftArguments,
+    inheritsFrom: child.inheritsFrom,
+    primeLoader: child.primeLoader,
+  };
+}
+
+/**
+ * Reads a version (local profile or manifest) and merges its whole inheritance
+ * chain, so loader profiles launch with both the vanilla and loader pieces.
+ */
+export async function resolveVersion(
+  versionId: string,
+  rootDir: string,
+  depth = 0,
+): Promise<ResolvedVersion> {
+  if (depth > 4) throw new Error(`Version ${versionId} inherits too deeply; is there a loop?`);
+  const version = await readVersion(versionId, rootDir);
+  if (!version.inheritsFrom) return { version, clientId: versionId };
+  const parent = await resolveVersion(version.inheritsFrom, rootDir, depth + 1);
+  return { version: mergeVersions(version, parent.version), clientId: parent.clientId };
+}
+
 /**
  * Makes sure every file required to run `versionId` exists locally and returns
  * everything needed to build a launch command.
@@ -127,16 +226,18 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
   const nativesDir = join(versionDir, 'natives');
 
   progress('meta', 0, 1, `Resolving ${versionId}`);
-  const version = await fetchVersion(versionId);
+  const { version, clientId } = await resolveVersion(versionId, rootDir);
   await fs.mkdir(versionDir, { recursive: true });
-  await fs.writeFile(join(versionDir, 'version.json'), JSON.stringify(version, null, 2)).catch(() => undefined);
+  if (!existsSync(join(versionDir, `${versionId}.json`))) {
+    await fs.writeFile(join(versionDir, 'version.json'), JSON.stringify(version, null, 2)).catch(() => undefined);
+  }
 
   // --- client jar + libraries -------------------------------------------------
   const files: { artifact: Artifact; dest: string }[] = [];
   const natives: { artifact: Artifact; dest: string }[] = [];
   const classpathEntries: string[] = [];
 
-  const clientJar = join(versionDir, `${versionId}.jar`);
+  const clientJar = join(rootDir, 'versions', clientId, `${clientId}.jar`);
   if (version.downloads?.client && needsDownload(clientJar)) {
     files.push({ artifact: version.downloads.client, dest: clientJar });
   }
@@ -163,8 +264,10 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
     // They belong on the classpath so LWJGL can unpack them itself, and older
     // versions can also have a classpath jar beside their natives, so this
     // falls through instead of skipping them.
-    const artifact = library.downloads?.artifact ?? (library.downloads ? null : mavenArtifact(library.name));
+    const artifact =
+      library.downloads?.artifact ?? (library.downloads ? null : mavenArtifact(library.name, library.url));
     if (!artifact) continue;
+    if (!artifact.sha1 && library.sha1) artifact.sha1 = library.sha1;
     const dest = join(librariesDir, artifact.path);
     classpathEntries.push(dest);
     if (needsDownload(dest)) files.push({ artifact, dest });

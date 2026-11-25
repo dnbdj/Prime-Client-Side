@@ -163,6 +163,26 @@ export function App() {
     setProgress(null);
   }, []);
 
+  const handleInstallLoader = useCallback(
+    async (kind: 'fabric' | 'forge') => {
+      if (!config?.versionId || busy) return;
+      setBusy(true);
+      setError(null);
+      setProgress({ phase: 'loader', current: 0, total: 1, label: `Installing ${kind}` });
+      const result = await window.prime.installLoader(kind, config.versionId);
+      setBusy(false);
+      if (!result.ok) {
+        setProgress(null);
+        setError(describeError(result.error ?? 'Loader install failed.'));
+        return;
+      }
+      await loadVersions();
+      if (result.versionId) await patchConfig({ versionId: result.versionId });
+      setProgress(null);
+    },
+    [busy, config?.versionId, loadVersions, patchConfig],
+  );
+
   const selected = useMemo(
     () => versions.find((version) => version.id === config?.versionId) ?? null,
     [config?.versionId, versions],
@@ -279,6 +299,7 @@ export function App() {
               onChannel={setChannel}
               onSelectVersion={(id) => void patchConfig({ versionId: id })}
               onVersionJvmArgs={setVersionJvmArgs}
+              onInstallLoader={(kind) => void handleInstallLoader(kind)}
               onReloadVersions={() => void loadVersions()}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}

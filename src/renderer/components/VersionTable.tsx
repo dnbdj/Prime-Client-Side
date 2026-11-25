@@ -30,7 +30,9 @@ export function VersionTable({ versions, selectedId, onSelect, empty }: Props) {
           >
             <span className={swatchClass(version.type)} aria-hidden="true" />
             <span className="v-id">{version.id}</span>
-            <span className="v-type">{version.type}</span>
+            <span className={version.loader ? 'v-type loader' : 'v-type'}>
+              {version.loader ?? version.type}
+            </span>
             <span className="v-date">{shortDate(version.releaseTime)}</span>
           </button>
         ))

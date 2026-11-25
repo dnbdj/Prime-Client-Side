@@ -18,6 +18,7 @@ type Props = {
   onChannel: (value: 'release' | 'all') => void;
   onSelectVersion: (id: string) => void;
   onVersionJvmArgs: (versionId: string, value: string) => void;
+  onInstallLoader: (kind: 'fabric' | 'forge') => void;
   onReloadVersions: () => void;
   onLaunch: () => void;
   onStop: () => void;
@@ -38,6 +39,7 @@ export function VersionsView({
   onChannel,
   onSelectVersion,
   onVersionJvmArgs,
+  onInstallLoader,
   onReloadVersions,
   onLaunch,
   onStop,
@@ -137,6 +139,31 @@ export function VersionsView({
               </label>
               <p className="note">Leave empty to use the global flags from Settings.</p>
             </>
+          ) : null}
+
+          {selected && !selected.loader ? (
+            <div className="loader-install">
+              <span className="loader-install-title">Modded loaders</span>
+              <div className="chip-row">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => onInstallLoader('fabric')}
+                >
+                  Install Fabric
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => onInstallLoader('forge')}
+                >
+                  Install Forge
+                </button>
+              </div>
+              <p className="note">Adds a {selected.id} loader profile to the version list.</p>
+            </div>
           ) : null}
 
           {running ? (
