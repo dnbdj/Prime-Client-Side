@@ -15,7 +15,6 @@ type Props = {
   running: boolean;
   consoleRef: RefObject<HTMLDivElement | null>;
   onSelectVersion: (id: string) => void;
-  onUsername: (name: string) => void;
   onBrowseAll: () => void;
   onLaunch: () => void;
   onStop: () => void;
@@ -32,7 +31,6 @@ export function HomeView({
   running,
   consoleRef,
   onSelectVersion,
-  onUsername,
   onBrowseAll,
   onLaunch,
   onStop,
@@ -88,23 +86,13 @@ export function HomeView({
         </div>
 
         <div className="hero-meta">
-          <label className="hero-cell">
-            <span>Player</span>
-            <input
-              value={config?.username ?? ''}
-              maxLength={16}
-              spellCheck={false}
-              placeholder="Steve"
-              onChange={(event) => onUsername(event.target.value)}
-            />
-          </label>
           <div className="hero-cell">
-            <span>Memory</span>
-            <strong>{config ? `${config.ramMb} MB` : '—'}</strong>
+            <span>Version</span>
+            <strong>{selected?.id ?? config?.versionId ?? '—'}</strong>
           </div>
           <div className="hero-cell">
-            <span>Java</span>
-            <strong>{config?.javaPath ? 'Custom' : 'Auto-detect'}</strong>
+            <span>Loader</span>
+            <strong>{selected?.loader ?? selected?.type ?? '—'}</strong>
           </div>
         </div>
       </section>

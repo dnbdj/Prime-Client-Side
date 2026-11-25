@@ -792,7 +792,7 @@ input::placeholder {
 
 .hero-meta {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1px;
   border-top: 1px solid var(--line);
   background: var(--line);
@@ -801,39 +801,28 @@ input::placeholder {
 .hero-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 16px 12px;
+  gap: 2px;
+  padding: 6px 16px 7px;
   background: var(--surface);
   min-width: 0;
 }
 
 .hero-cell > span {
   color: var(--dimmer);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .hero-cell strong {
-  font-size: 12.5px;
+  color: var(--dim);
+  font-size: 11.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-
-.hero-cell input {
-  height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  font-size: 12.5px;
-  box-shadow: none;
-}
-
-.hero-cell input:focus {
-  box-shadow: none;
-  border-bottom: 1px solid var(--green);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* card grid, Modrinth style */

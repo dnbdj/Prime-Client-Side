@@ -493,7 +493,6 @@ export function App() {
               running={running}
               consoleRef={consoleRef}
               onSelectVersion={(id) => void patchConfig({ versionId: id })}
-              onUsername={(username) => void patchConfig({ username })}
               onBrowseAll={() => setView('instances')}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}
