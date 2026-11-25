@@ -291,6 +291,37 @@ export function App() {
     [config?.instances, instances, patchConfig],
   );
 
+  const removeInstance = useCallback(
+    async (entry: InstanceEntry) => {
+      if (runningId === entry.id) {
+        setError('Stop the game before deleting this instance.');
+        return;
+      }
+      const confirmed = window.confirm(
+        `Delete "${entry.name}"?\n\nThis removes the instance and, when it has its own folder under instances, that folder and its mods. The shared Minecraft folder is never deleted.`,
+      );
+      if (!confirmed) return;
+      try {
+        const result = await window.prime.deleteInstance(entry.id, entry.versionId, true);
+        setConfig(result.config);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        appendLog(
+          `[prime] Deleted ${entry.name}${result.folderDeleted ? ' and its game folder' : ''}.`,
+        );
+        if (instanceId === entry.id) {
+          setInstanceId(null);
+          setView('instances');
+        }
+      } catch (err) {
+        setError(describeError(err));
+      }
+    },
+    [appendLog, instanceId, runningId],
+  );
+
   const activeInstance = useMemo(
     () => instances.find((card) => card.entry.id === instanceId) ?? null,
     [instanceId, instances],
@@ -524,6 +555,7 @@ export function App() {
               onInstallLoader={(kind) =>
                 void handleInstallLoader(kind, activeInstance.version.id)
               }
+              onDelete={() => void removeInstance(activeInstance.entry)}
             />
           ) : view === 'instances' || (view === 'instance' && !activeInstance) ? (
             <InstancesView
@@ -543,6 +575,7 @@ export function App() {
                 setView('instance');
               }}
               onPlay={(entry) => void handleLaunch(entry.versionId, entry.id)}
+              onDelete={(entry) => void removeInstance(entry)}
               onStop={() => void handleStop()}
               onReloadVersions={loadVersions}
             />

@@ -23,6 +23,7 @@ type Props = {
   onAddInstance: (entry: InstanceEntry) => void;
   onOpenInstance: (entry: InstanceEntry) => void;
   onPlay: (entry: InstanceEntry) => void;
+  onDelete: (entry: InstanceEntry) => void;
   onStop: () => void;
   onReloadVersions: () => Promise<void> | void;
 };
@@ -48,6 +49,7 @@ export function InstancesView({
   onAddInstance,
   onOpenInstance,
   onPlay,
+  onDelete,
   onStop,
   onReloadVersions,
 }: Props) {
@@ -171,6 +173,15 @@ export function InstancesView({
                         </button>
                       )}
                       <span className="vcard-state">{inGame ? 'In game' : 'Open'}</span>
+                      <button
+                        type="button"
+                        className="vcard-delete"
+                        aria-label={`Delete ${entry.name}`}
+                        title={`Delete ${entry.name}`}
+                        onClick={() => onDelete(entry)}
+                      >
+                        &times;
+                      </button>
                     </div>
                   </div>
                 );

@@ -7,6 +7,7 @@ import type {
   VersionSummary,
 } from '../../shared/api';
 import { INSTANCE_COLORS, INSTANCE_LOADERS } from '../../shared/instances';
+import { ModPicker } from '../components/ModPicker';
 import { shortDate } from '../format';
 
 type Props = {
@@ -23,6 +24,7 @@ type Props = {
   onEdit: (patch: Partial<InstanceEntry>) => void;
   onJvmArgs: (value: string) => void;
   onInstallLoader: (kind: 'fabric' | 'forge') => void;
+  onDelete: () => void;
 };
 
 function formatSize(bytes: number): string {
@@ -45,12 +47,14 @@ export function InstanceView({
   onEdit,
   onJvmArgs,
   onInstallLoader,
+  onDelete,
 }: Props) {
   const [name, setName] = useState(entry.name);
   const [mods, setMods] = useState<ModFile[]>([]);
   const [modsDir, setModsDir] = useState('');
   const [modsBusy, setModsBusy] = useState(false);
   const [modsError, setModsError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => setName(entry.name), [entry.name]);
 
@@ -144,6 +148,9 @@ export function InstanceView({
               {busy ? 'Launching…' : 'Play'}
             </button>
           )}
+          <button type="button" className="btn-ghost danger-text" onClick={onDelete}>
+            Delete
+          </button>
           {progress ? (
             <div className="progress instance-progress">
               <div className="progress-meta">
@@ -278,6 +285,14 @@ export function InstanceView({
                 type="button"
                 className="btn-ghost"
                 disabled={modsBusy}
+                onClick={() => setPickerOpen(true)}
+              >
+                Browse Modrinth / CurseForge
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={modsBusy}
                 onClick={() => void window.prime.openMods(entry.id, entry.versionId)}
               >
                 Open folder
@@ -326,6 +341,14 @@ export function InstanceView({
           </div>
         </section>
       </div>
+
+      {pickerOpen ? (
+        <ModPicker
+          entry={entry}
+          onClose={() => setPickerOpen(false)}
+          onInstalled={() => void refreshMods()}
+        />
+      ) : null}
     </div>
   );
 }

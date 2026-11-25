@@ -303,6 +303,33 @@ export function SettingsView({
 
             <section className="panel wide">
               <div className="panel-head">
+                <h2 className="panel-title">Mod picker</h2>
+                <span className={config?.curseForgeApiKey ? 'chip green' : 'chip subtle'}>
+                  {config?.curseForgeApiKey ? 'CurseForge ready' : 'Modrinth only'}
+                </span>
+              </div>
+              <div className="panel-body">
+                <label className="field">
+                  <span>CurseForge API key</span>
+                  <input
+                    type="password"
+                    value={config?.curseForgeApiKey ?? ''}
+                    spellCheck={false}
+                    placeholder="Paste a key from console.curseforge.com"
+                    onChange={(event) =>
+                      onPatch({ curseForgeApiKey: event.target.value || null })
+                    }
+                  />
+                </label>
+                <p className="note">
+                  Stored locally in Prime's config. Modrinth needs no key; without one, the
+                  CurseForge tab in the mod picker explains what to add.
+                </p>
+              </div>
+            </section>
+
+            <section className="panel wide">
+              <div className="panel-head">
                 <h2 className="panel-title">Game folders</h2>
                 <div className="chip-row">
                   <button

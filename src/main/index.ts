@@ -4,13 +4,25 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
   type WriteStream,
 } from 'node:fs';
-import { basename, join } from 'node:path';
-import type { LaunchResult, ModFile, PrimeConfig, ProgressEvent } from '../shared/api';
+import { basename, join, resolve, sep } from 'node:path';
+import type {
+  InstanceDeleteResult,
+  InstanceLoader,
+  LaunchResult,
+  ModFile,
+  ModInstallResult,
+  ModProvider,
+  ModSearchResponse,
+  PrimeConfig,
+  ProgressEvent,
+} from '../shared/api';
+import { installMod, searchMods } from './mods';
 import {
   cancelDeviceFlow,
   currentAccount,
@@ -177,6 +189,33 @@ function modsDirectory(instanceId: string, versionId: string): string {
   return join(instanceGameDir(instanceId, versionId), 'mods');
 }
 
+/** CurseForge key: Settings wins, then the environment for CLI runs. */
+function curseForgeKey(): string | null {
+  const stored = loadConfig().curseForgeApiKey;
+  if (typeof stored === 'string' && stored.trim().length > 0) return stored.trim();
+  const fromEnv = process.env.CURSEFORGE_API_KEY;
+  return fromEnv && fromEnv.trim().length > 0 ? fromEnv.trim() : null;
+}
+
+/** Loader profiles inherit the actual Minecraft version from their parent. */
+function gameVersionOf(versionId: string): string {
+  try {
+    const meta = JSON.parse(
+      readFileSync(join(minecraftRoot(), 'versions', versionId, `${versionId}.json`), 'utf8'),
+    ) as { inheritsFrom?: unknown };
+    if (typeof meta.inheritsFrom === 'string' && meta.inheritsFrom.length > 0) {
+      return meta.inheritsFrom;
+    }
+  } catch {
+    // Not installed locally yet: fall back to the profile naming below.
+  }
+  const forge = /^(.+)-forge-[\d.]+$/.exec(versionId);
+  if (forge) return forge[1];
+  const fabric = /^fabric-loader-[\d.]+-(.+)$/.exec(versionId);
+  if (fabric) return fabric[1];
+  return versionId;
+}
+
 function listModFiles(instanceId: string, versionId: string): ModFile[] {
   const dir = modsDirectory(instanceId, versionId);
   try {
@@ -251,6 +290,109 @@ ipcMain.handle(
       versionId,
       paths.filter((path): path is string => typeof path === 'string' && path.length > 0),
     );
+  },
+);
+
+ipcMain.handle(
+  'prime:mods:search',
+  async (
+    _event,
+    provider: ModProvider,
+    query: string,
+    versionId: string,
+    loader: InstanceLoader,
+  ): Promise<ModSearchResponse> => {
+    try {
+      if (provider !== 'modrinth' && provider !== 'curseforge') {
+        return { ok: false, results: [], error: 'Unknown mod provider.' };
+      }
+      const results = await searchMods(
+        provider,
+        typeof query === 'string' ? query : '',
+        gameVersionOf(String(versionId ?? '')),
+        loader,
+        curseForgeKey(),
+      );
+      return { ok: true, results };
+    } catch (error) {
+      return {
+        ok: false,
+        results: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
+);
+
+ipcMain.handle(
+  'prime:mods:install',
+  async (
+    _event,
+    provider: ModProvider,
+    projectId: string,
+    instanceId: string,
+    versionId: string,
+  ): Promise<ModInstallResult> => {
+    try {
+      if (provider !== 'modrinth' && provider !== 'curseforge') {
+        return { ok: false, error: 'Unknown mod provider.' };
+      }
+      if (typeof projectId !== 'string' || projectId.length === 0) {
+        return { ok: false, error: 'No mod selected.' };
+      }
+      const entry = loadConfig().instances.find((candidate) => candidate.id === instanceId);
+      const dir = modsDirectory(instanceId, versionId);
+      const name = await installMod(
+        provider,
+        projectId,
+        dir,
+        gameVersionOf(versionId),
+        entry?.loader ?? 'vanilla',
+        curseForgeKey(),
+      );
+      return { ok: true, file: { name, size: statSync(join(dir, name)).size } };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
+);
+
+ipcMain.handle(
+  'prime:instance:delete',
+  (_event, instanceId: string, versionId: string, deleteFolder: boolean): InstanceDeleteResult => {
+    const config = loadConfig();
+    const entry = config.instances.find((candidate) => candidate.id === instanceId) ?? null;
+    const targetVersion = entry?.versionId ?? versionId;
+    const instances = entry
+      ? config.instances.filter((candidate) => candidate.id !== instanceId)
+      : config.instances;
+    const stillCovered = new Set(instances.map((candidate) => candidate.versionId));
+    // Dropping the record is not enough: recently played entries would turn it
+    // back into a derived card on the instances page.
+    const recent = config.recent.filter(
+      (item) => item.versionId !== targetVersion || stillCovered.has(item.versionId),
+    );
+    const nextVersionId =
+      config.versionId === targetVersion && !stillCovered.has(targetVersion)
+        ? (instances[0]?.versionId ?? null)
+        : config.versionId;
+
+    let folderDeleted = false;
+    if (deleteFolder && entry?.gameDir) {
+      const instancesRoot = resolve(legacyGameDir(), 'instances');
+      const target = resolve(entry.gameDir);
+      // The legacy shared folder is never touched: it holds the original
+      // worlds, config and Forge profile.
+      if (target !== resolve(legacyGameDir()) && target.startsWith(`${instancesRoot}${sep}`)) {
+        rmSync(target, { recursive: true, force: true });
+        folderDeleted = true;
+      }
+    }
+
+    return {
+      config: saveConfig({ instances, recent, versionId: nextVersionId }),
+      folderDeleted,
+    };
   },
 );
 

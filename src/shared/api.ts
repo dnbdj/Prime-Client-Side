@@ -43,6 +43,38 @@ export type LoaderInstallResult = {
   versionId?: string;
 };
 
+export type ModProvider = 'modrinth' | 'curseforge';
+
+/** One project returned by the in-app mod picker. */
+export type ModSearchResult = {
+  provider: ModProvider;
+  id: string;
+  name: string;
+  summary: string;
+  author: string;
+  downloads: number;
+  iconUrl: string | null;
+  url: string;
+};
+
+export type ModSearchResponse = {
+  ok: boolean;
+  results: ModSearchResult[];
+  error?: string;
+};
+
+export type ModInstallResult = {
+  ok: boolean;
+  error?: string;
+  file?: ModFile;
+};
+
+export type InstanceDeleteResult = {
+  config: PrimeConfig;
+  folderDeleted: boolean;
+  error?: string;
+};
+
 /** A jar sitting in the game folder's mods directory. */
 export type ModFile = {
   name: string;
@@ -74,6 +106,8 @@ export type PrimeConfig = {
   instances: InstanceEntry[];
   /** Instances that were actually played, newest first. */
   recent: RecentInstance[];
+  /** Optional CurseForge API key for the in-app mod picker. */
+  curseForgeApiKey: string | null;
 };
 
 export type RecentInstance = {
@@ -151,6 +185,22 @@ export type PrimeApi = {
   addMods(instanceId: string, versionId: string): Promise<ModFile[]>;
   /** Copies jars from explicit paths; the UI dialog and tests both land here. */
   addModsFrom(instanceId: string, versionId: string, paths: string[]): Promise<ModFile[]>;
+  /** Searches Modrinth or CurseForge for mods matching this instance. */
+  searchMods(
+    provider: ModProvider,
+    query: string,
+    gameVersion: string,
+    loader: InstanceLoader,
+  ): Promise<ModSearchResponse>;
+  /** Downloads the newest compatible file straight into the instance's mods folder. */
+  installMod(
+    provider: ModProvider,
+    projectId: string,
+    instanceId: string,
+    versionId: string,
+  ): Promise<ModInstallResult>;
+  /** Removes the record (and optionally its own game folder). */
+  deleteInstance(instanceId: string, versionId: string, deleteFolder: boolean): Promise<InstanceDeleteResult>;
   removeMod(instanceId: string, versionId: string, name: string): Promise<ModFile[]>;
   modsDir(instanceId: string, versionId: string): Promise<string>;
   openMods(instanceId: string, versionId: string): Promise<void>;

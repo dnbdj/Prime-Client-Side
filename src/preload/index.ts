@@ -1,12 +1,15 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type {
   DeviceCode,
+  InstanceDeleteResult,
   JavaCandidate,
   JavaCheckResult,
   LaunchResult,
   LoaderInstallResult,
   MinecraftAccount,
   ModFile,
+  ModInstallResult,
+  ModSearchResponse,
   PrimeApi,
   PrimeConfig,
   ProgressEvent,
@@ -42,6 +45,12 @@ const api: PrimeApi = {
     ipcRenderer.invoke('prime:mods:add', instanceId, versionId) as Promise<ModFile[]>,
   addModsFrom: (instanceId, versionId, paths) =>
     ipcRenderer.invoke('prime:mods:addFrom', instanceId, versionId, paths) as Promise<ModFile[]>,
+  searchMods: (provider, query, versionId, loader) =>
+    ipcRenderer.invoke('prime:mods:search', provider, query, versionId, loader) as Promise<ModSearchResponse>,
+  installMod: (provider, projectId, instanceId, versionId) =>
+    ipcRenderer.invoke('prime:mods:install', provider, projectId, instanceId, versionId) as Promise<ModInstallResult>,
+  deleteInstance: (instanceId, versionId, deleteFolder) =>
+    ipcRenderer.invoke('prime:instance:delete', instanceId, versionId, deleteFolder) as Promise<InstanceDeleteResult>,
   removeMod: (instanceId, versionId, name) =>
     ipcRenderer.invoke('prime:mods:remove', instanceId, versionId, name) as Promise<ModFile[]>,
   modsDir: (instanceId, versionId) =>
