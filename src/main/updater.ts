@@ -49,6 +49,47 @@ async function extract(zipPath: string, staging: string): Promise<void> {
   }
 }
 
+function psQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * A plain spawn would put the helper inside Electron's job object, and Windows
+ * kills the whole job when the launcher exits — the swap would never happen.
+ * Win32_Process.Create starts it under WMI instead, outside that job.
+ */
+async function launchDetached(
+  scriptPath: string,
+  options: { processId: number; source: string; target: string; exe: string },
+): Promise<void> {
+  const powershell = join(
+    process.env.SystemRoot ?? 'C:\\Windows',
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+  const commandLine = [
+    `"${powershell}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File`,
+    psQuote(scriptPath),
+    '-ProcessId',
+    String(options.processId),
+    '-Source',
+    psQuote(options.source),
+    '-Target',
+    psQuote(options.target),
+    '-Exe',
+    psQuote(options.exe),
+  ].join(' ');
+  await run(powershell, [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    `Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${psQuote(commandLine)} } | Out-Null`,
+  ]);
+}
+
 const APPLY_SCRIPT = `param(
   [int]$ProcessId,
   [string]$Source,
@@ -110,26 +151,12 @@ export async function installUpdate(
 
   const scriptPath = join(work, 'apply-update.ps1');
   writeFileSync(scriptPath, APPLY_SCRIPT, 'utf8');
-  const child = spawn(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      scriptPath,
-      '-ProcessId',
-      String(process.pid),
-      '-Source',
-      staging,
-      '-Target',
-      target,
-      '-Exe',
-      app.getPath('exe'),
-    ],
-    { detached: true, stdio: 'ignore', windowsHide: true },
-  );
-  child.unref();
+  await launchDetached(scriptPath, {
+    processId: process.pid,
+    source: staging,
+    target,
+    exe: app.getPath('exe'),
+  });
   onProgress(100);
 
   // Let the renderer paint the finished state before the window closes.
