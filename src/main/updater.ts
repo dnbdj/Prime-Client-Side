@@ -53,6 +53,11 @@ function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/** -File only accepts double-quoted paths; single quotes become part of the path. */
+function dq(value: string): string {
+  return `"${value}"`;
+}
+
 /**
  * A plain spawn would put the helper inside Electron's job object, and Windows
  * kills the whole job when the launcher exits — the swap would never happen.
@@ -71,22 +76,22 @@ async function launchDetached(
   );
   const commandLine = [
     `"${powershell}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File`,
-    psQuote(scriptPath),
+    dq(scriptPath),
     '-ProcessId',
     String(options.processId),
     '-Source',
-    psQuote(options.source),
+    dq(options.source),
     '-Target',
-    psQuote(options.target),
+    dq(options.target),
     '-Exe',
-    psQuote(options.exe),
+    dq(options.exe),
   ].join(' ');
   await run(powershell, [
     '-NoProfile',
     '-ExecutionPolicy',
     'Bypass',
     '-Command',
-    `Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${psQuote(commandLine)} } | Out-Null`,
+    `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${psQuote(commandLine)} }; if ($result.ReturnValue -ne 0) { throw "Could not start the update helper (WMI $($result.ReturnValue))." }`,
   ]);
 }
 
