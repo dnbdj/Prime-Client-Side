@@ -10,7 +10,12 @@ const USER_AGENT = 'prime-client/0.1 (Minecraft launcher; mod picker)';
 const MODRINTH = 'https://api.modrinth.com/v2';
 const CURSEFORGE = 'https://api.curseforge.com/v1';
 
-const CF_LOADER: Partial<Record<InstanceLoader, number>> = { forge: 1, fabric: 4 };
+const CF_LOADER: Partial<Record<InstanceLoader, number>> = { forge: 1, fabric: 4, quilt: 4 };
+
+/** Loaders both mod platforms know by name. */
+function modLoaderName(loader: InstanceLoader): 'fabric' | 'forge' | 'quilt' | null {
+  return loader === 'fabric' || loader === 'forge' || loader === 'quilt' ? loader : null;
+}
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
@@ -75,7 +80,8 @@ async function searchModrinth(
   if (query.trim()) url.searchParams.set('query', query.trim());
   url.searchParams.set('limit', '20');
   const facets: string[][] = [['project_type:mod']];
-  if (loader === 'fabric' || loader === 'forge') facets.push([`categories:${loader}`]);
+  const loaderName = modLoaderName(loader);
+  if (loaderName) facets.push([`categories:${loaderName}`]);
   if (gameVersion) facets.push([`versions:${gameVersion}`]);
   url.searchParams.set('facets', JSON.stringify(facets));
 
@@ -104,8 +110,9 @@ async function installModrinth(
   loader: InstanceLoader,
 ): Promise<string> {
   const url = new URL(`${MODRINTH}/project/${encodeURIComponent(projectId)}/version`);
-  if (loader === 'fabric' || loader === 'forge') {
-    url.searchParams.set('loaders', JSON.stringify([loader]));
+  const loaderName = modLoaderName(loader);
+  if (loaderName) {
+    url.searchParams.set('loaders', JSON.stringify([loaderName]));
   }
   if (gameVersion) url.searchParams.set('game_versions', JSON.stringify([gameVersion]));
 

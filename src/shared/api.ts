@@ -2,11 +2,11 @@ export type VersionSummary = {
   id: string;
   type: string;
   releaseTime: string;
-  /** 'fabric' or 'forge' for loader profiles Prime installed. */
-  loader?: 'fabric' | 'forge';
+  /** Loader profile Prime installed, when this entry is one. */
+  loader?: LoaderKind;
 };
 
-export type LoaderKind = 'fabric' | 'forge';
+export type LoaderKind = 'fabric' | 'forge' | 'quilt';
 
 /** How an instance was started: the plain game, a mod loader, or a modpack. */
 export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';

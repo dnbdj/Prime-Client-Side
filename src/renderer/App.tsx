@@ -188,7 +188,7 @@ export function App() {
   }, []);
 
   const handleInstallLoader = useCallback(
-    async (kind: 'fabric' | 'forge', gameVersion?: string) => {
+    async (kind: 'fabric' | 'forge' | 'quilt', gameVersion?: string) => {
       const target = gameVersion ?? config?.versionId;
       if (!target || busy) return;
       setBusy(true);

@@ -6,7 +6,7 @@ import { downloadFile, fetchJson } from './net';
 import { discoverJava } from './java';
 import { prepare, resolveVersion, type VersionJson } from './install';
 
-export type LoaderKind = 'fabric' | 'forge';
+export type LoaderKind = 'fabric' | 'forge' | 'quilt';
 
 export type LoaderInstall = {
   versionId: string;
@@ -16,9 +16,39 @@ export type LoaderInstall = {
 };
 
 type FabricLoader = { loader: { version: string; stable: boolean } };
+type QuiltLoader = { loader: { version: string } };
+
+/** 0.30.2 / 0.31.0-beta.6 -> numbers; a stable release outranks its prereleases. */
+function quiltRank(version: string): { parts: number[]; prerelease: number } {
+  const [core, tag] = version.split('-', 2);
+  const parts = core.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  const prerelease = tag ? Number.parseInt(/(\d+)\s*$/.exec(tag)?.[1] ?? '0', 10) : Number.MAX_SAFE_INTEGER;
+  return { parts, prerelease };
+}
+
+/**
+ * Quilt's meta lists builds in no useful order and its build numbers restart
+ * per version line, so the newest loader is picked by comparing versions.
+ */
+function newestQuiltLoader(loaders: QuiltLoader[]): string {
+  // Fabric's install prefers a stable loader; Quilt's meta mixes betas into the
+  // same list, so stable builds win and betas are only used when there are none.
+  const stable = loaders.filter((entry) => !entry.loader.version.includes('-'));
+  const ranked = [...(stable.length > 0 ? stable : loaders)].sort((a, b) => {
+    const left = quiltRank(a.loader.version);
+    const right = quiltRank(b.loader.version);
+    for (let i = 0; i < 3; i += 1) {
+      if (left.parts[i] !== right.parts[i]) return right.parts[i] - left.parts[i];
+    }
+    return right.prerelease - left.prerelease;
+  });
+  return ranked[0].loader.version;
+}
 type Promotions = { promos: Record<string, string> };
 
 const FABRIC_META = 'https://meta.fabricmc.net/v2/versions';
+const QUILT_META = 'https://meta.quiltmc.org/v3/versions';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -84,6 +114,53 @@ export async function installFabric(
 
   progress({ phase: 'loader', current: 3, total: 3, label: 'Fabric installed' });
   return { versionId: profile.id, kind: 'fabric', gameVersion, loaderVersion: loader.loader.version };
+}
+
+/**
+ * Real Quilt install: Quilt serves a Fabric-shaped profile of its own, so the
+ * loader half is written straight from its meta and prepared like any other
+ * profile. Quilt's meta has no stable flag, so the newest build wins.
+ */
+export async function installQuilt(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({ phase: 'loader', current: 0, total: 3, label: `Looking up Quilt for ${gameVersion}` });
+  const loaders = await fetchJson<QuiltLoader[]>(
+    `${QUILT_META}/loader/${encodeURIComponent(gameVersion)}`,
+  );
+  if (!Array.isArray(loaders) || loaders.length === 0) {
+    throw new Error(`Quilt has no loader build for Minecraft ${gameVersion}.`);
+  }
+  const loaderVersion = newestQuiltLoader(loaders);
+  log(`[prime] Quilt loader ${loaderVersion} for ${gameVersion}`);
+
+  progress({ phase: 'loader', current: 1, total: 3, label: 'Fetching Quilt profile' });
+  const profile = await fetchJson<VersionJson>(
+    `${QUILT_META}/loader/${encodeURIComponent(gameVersion)}/${encodeURIComponent(loaderVersion)}/profile/json`,
+  );
+  if (!profile.id || profile.inheritsFrom !== gameVersion) {
+    throw new Error(`Quilt returned an unexpected profile for ${gameVersion}.`);
+  }
+  profile.primeLoader = 'quilt';
+  profile.releaseTime = profile.releaseTime ?? new Date().toISOString();
+  log(`[prime] Quilt profile ${profile.id} inherits ${profile.inheritsFrom}, main ${profile.mainClass}`);
+
+  await writeProfile(rootDir, profile);
+  try {
+    // Downloads the vanilla half and Quilt's libraries into the normal store.
+    await prepare(profile.id, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, profile.id);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 3, total: 3, label: 'Quilt installed' });
+  return { versionId: profile.id, kind: 'quilt', gameVersion, loaderVersion };
 }
 
 async function runInstaller(
@@ -199,7 +276,7 @@ export async function installLoader(
   log: Log,
 ): Promise<LoaderInstall> {
   const resolved = await pickGameVersion(gameVersion, rootDir);
-  return kind === 'fabric'
-    ? installFabric(resolved, rootDir, progress, log)
-    : installForge(resolved, rootDir, progress, log);
+  if (kind === 'fabric') return installFabric(resolved, rootDir, progress, log);
+  if (kind === 'forge') return installForge(resolved, rootDir, progress, log);
+  return installQuilt(resolved, rootDir, progress, log);
 }

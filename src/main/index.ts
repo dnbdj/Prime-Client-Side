@@ -117,7 +117,9 @@ ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
-  if (kind !== 'fabric' && kind !== 'forge') return { ok: false, error: 'Unknown loader.' };
+  if (kind !== 'fabric' && kind !== 'forge' && kind !== 'quilt') {
+    return { ok: false, error: 'Unknown loader.' };
+  }
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
   const rootDir = minecraftRoot();
   const log = (line: string) => send('prime:log', line);
@@ -214,6 +216,8 @@ function gameVersionOf(versionId: string): string {
   if (forge) return forge[1];
   const fabric = /^fabric-loader-[\d.]+-(.+)$/.exec(versionId);
   if (fabric) return fabric[1];
+  const quilt = /^quilt-loader-[\d.]+-(.+)$/.exec(versionId);
+  if (quilt) return quilt[1];
   return versionId;
 }
 

@@ -1570,6 +1570,10 @@ input[type='range']::-webkit-slider-thumb {
   background-color: rgba(219, 146, 41, 0.32);
 }
 
+.loader-mark.quilt {
+  background-color: rgba(139, 92, 246, 0.32);
+}
+
 .loader-mark.modpack {
   background-color: rgba(101, 64, 76, 0.7);
 }

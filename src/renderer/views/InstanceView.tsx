@@ -23,7 +23,7 @@ type Props = {
   onStop: () => void;
   onEdit: (patch: Partial<InstanceEntry>) => void;
   onJvmArgs: (value: string) => void;
-  onInstallLoader: (kind: 'fabric' | 'forge') => void;
+  onInstallLoader: (kind: 'fabric' | 'forge' | 'quilt') => void;
   onDelete: () => void;
 };
 
@@ -259,6 +259,14 @@ export function InstanceView({
                   >
                     Install Forge
                   </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('quilt')}
+                  >
+                    Install Quilt
+                  </button>
                 </div>
                 <p className="note">Adds a {entry.versionId} loader profile as its own instance.</p>
               </div>
@@ -336,7 +344,7 @@ export function InstanceView({
                 : "Mods are read from this instance's own game folder."}
             </p>
             <p className="note">
-              Mods only do something with a loader that supports them: Fabric or Forge.
+              Mods only do something with a loader that supports them: Fabric, Forge or Quilt.
             </p>
           </div>
         </section>

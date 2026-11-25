@@ -3,6 +3,7 @@ import type {
   InstanceContent,
   InstanceEntry,
   InstanceLoader,
+  LoaderKind,
   ProgressEvent,
   VersionSummary,
 } from '../../shared/api';
@@ -20,7 +21,7 @@ type Props = {
   onCreate: (entry: InstanceEntry) => void;
 };
 
-/** Every loader the app knows about. Only Vanilla, Fabric and Forge can be set
+/** Every loader the app knows about. Vanilla, Fabric, Forge and Quilt can be set
  * up today; the rest are listed as planned so the picker matches what launchers
  * like Prism offer without pretending the installs exist. */
 const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[] = [
@@ -41,12 +42,12 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   },
   { id: 'nilloader', label: 'NilLoader', blurb: 'Minimal bytecode patching loader.', planned: true },
   { id: 'ornithe', label: 'Ornithe', blurb: 'Fabric for old versions with legacy mappings.', planned: true },
-  { id: 'quilt', label: 'Quilt', blurb: 'Fabric-compatible loader with extra APIs.', planned: true },
+  { id: 'quilt', label: 'Quilt', blurb: 'Fabric-compatible loader with extra APIs.' },
   { id: 'rift', label: 'Rift', blurb: 'Loader for 1.13-era mods.', planned: true },
   {
     id: 'modpack',
     label: 'Modpack',
-    blurb: 'Modpack import is not built yet - pick Vanilla, Fabric or Forge.',
+    blurb: 'Modpack import is not built yet - pick Vanilla, Fabric, Forge or Quilt.',
     planned: true,
   },
 ];
@@ -62,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric and Forge work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge and Quilt work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -121,20 +122,21 @@ export function InstanceWizard({
 
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
-  const needsInstall = loader === 'fabric' || loader === 'forge';
+  const needsInstall = loader === 'fabric' || loader === 'forge' || loader === 'quilt';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
 
-  // Fabric and Forge are real installs, not labels: run the same installer the
-  // detail panel uses and only create the instance once a profile exists.
+  // Fabric, Forge and Quilt are real installs, not labels: run the same
+  // installer the detail panel uses and only create the instance once a
+  // profile exists.
   const finish = async () => {
     if (!pending || installing) return;
     setInstall({ status: 'idle' });
 
     if (needsInstall) {
       setInstall({ status: 'installing' });
-      const result = await window.prime.installLoader(loader as 'fabric' | 'forge', pending);
+      const result = await window.prime.installLoader(loader as LoaderKind, pending);
       if (!result.ok || !result.versionId) {
         setInstall({
           status: 'error',
@@ -231,7 +233,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric and Forge are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge and Quilt are the working choices today.'}
             </p>
           </>
         ) : null}
