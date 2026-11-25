@@ -18,6 +18,9 @@ type Props = {
   onBrowseAll: () => void;
   onLaunch: () => void;
   onStop: () => void;
+  headerPhoto: string | null;
+  onPickHeaderPhoto: () => void;
+  onRemoveHeaderPhoto: () => void;
 };
 
 export function HomeView({
@@ -34,13 +37,30 @@ export function HomeView({
   onBrowseAll,
   onLaunch,
   onStop,
+  headerPhoto,
+  onPickHeaderPhoto,
+  onRemoveHeaderPhoto,
 }: Props) {
 
   return (
     <div className="home">
       <section className="hero">
-        <div className="hero-art" aria-hidden="true">
-          <div className="hero-skyline" />
+        <div className={headerPhoto ? 'hero-art has-photo' : 'hero-art'}>
+          {headerPhoto ? (
+            <img className="hero-photo" src={headerPhoto} alt="" />
+          ) : (
+            <div className="hero-skyline" aria-hidden="true" />
+          )}
+          <div className="hero-photo-actions">
+            <button type="button" className="btn-ghost" onClick={onPickHeaderPhoto}>
+              {headerPhoto ? 'Change photo' : 'Add photo'}
+            </button>
+            {headerPhoto ? (
+              <button type="button" className="btn-ghost" onClick={onRemoveHeaderPhoto}>
+                Remove
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="hero-body">

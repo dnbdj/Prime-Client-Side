@@ -192,6 +192,56 @@ ipcMain.handle('prime:dir:default', () => minecraftRoot());
 
 ipcMain.handle('prime:app:version', () => app.getVersion());
 
+const HEADER_IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+};
+
+// The chosen photo is copied into the user data folder so it survives an update
+// (which replaces the install folder) and survives the original being moved.
+ipcMain.handle('prime:header:pick', async (): Promise<string | null> => {
+  const picked = await dialog.showOpenDialog({
+    title: 'Pick a header photo',
+    buttonLabel: 'Use this photo',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+  });
+  if (picked.canceled || picked.filePaths.length === 0) return null;
+  const source = picked.filePaths[0];
+  const extension = (source.match(/\.[a-z0-9]+$/i)?.[0] ?? '.png').toLowerCase();
+  if (!HEADER_IMAGE_TYPES[extension]) return null;
+  const folder = app.getPath('userData');
+  for (const name of readdirSync(folder)) {
+    if (name.startsWith('header-image.')) rmSync(join(folder, name), { force: true });
+  }
+  const target = join(folder, `header-image${extension}`);
+  copyFileSync(source, target);
+  return target;
+});
+
+ipcMain.handle(
+  'prime:header:data',
+  async (_event, filePath: string | null): Promise<string | null> => {
+    if (!filePath) return null;
+    try {
+      // Only ever read the copy this app stored; never an arbitrary path.
+      const folder = resolve(app.getPath('userData'));
+      const target = resolve(filePath);
+      if (!target.startsWith(folder)) return null;
+      const info = statSync(target);
+      if (!info.isFile() || info.size > 12 * 1024 * 1024) return null;
+      const mime = HEADER_IMAGE_TYPES[(target.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase()];
+      if (!mime) return null;
+      return `data:${mime};base64,${readFileSync(target).toString('base64')}`;
+    } catch {
+      return null;
+    }
+  },
+);
+
 ipcMain.handle('prime:update:check', async () =>
   checkForUpdates(loadConfig().updateFeed, app.getVersion()),
 );

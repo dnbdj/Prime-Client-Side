@@ -31,6 +31,7 @@ const DEFAULTS: PrimeConfig = {
   instances: [],
   recent: [],
   curseForgeApiKey: null,
+  headerImage: null,
 };
 
 function configPath(): string {

@@ -79,6 +79,9 @@ const api: PrimeApi = {
   errorCatalog: () => ipcRenderer.invoke('prime:errors:catalog') as Promise<ErrorEntry[]>,
   lookupError: (code) => ipcRenderer.invoke('prime:errors:lookup', code) as Promise<ErrorEntry | null>,
   appVersion: () => ipcRenderer.invoke('prime:app:version') as Promise<string>,
+  pickHeaderImage: () => ipcRenderer.invoke('prime:header:pick') as Promise<string | null>,
+  headerImage: (filePath) =>
+    ipcRenderer.invoke('prime:header:data', filePath) as Promise<string | null>,
   checkUpdates: () => ipcRenderer.invoke('prime:update:check') as Promise<UpdateStatus>,
   installUpdate: (assetUrl, version) =>
     ipcRenderer.invoke('prime:update:install', assetUrl, version) as Promise<{

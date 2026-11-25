@@ -127,6 +127,8 @@ export type PrimeConfig = {
   recent: RecentInstance[];
   /** Optional CurseForge API key for the in-app mod picker. */
   curseForgeApiKey: string | null;
+  /** Photo shown in the Home header, stored in the user data folder. */
+  headerImage: string | null;
 };
 
 export type RecentInstance = {
@@ -294,6 +296,10 @@ export type PrimeApi = {
   errorCatalog(): Promise<ErrorEntry[]>;
   lookupError(code: string): Promise<ErrorEntry | null>;
   appVersion(): Promise<string>;
+  /** Opens a picker and copies the chosen image into the user data folder. */
+  pickHeaderImage(): Promise<string | null>;
+  /** Reads a stored header image back as a data URL, or null. */
+  headerImage(filePath: string | null): Promise<string | null>;
   checkUpdates(): Promise<UpdateStatus>;
   /** Downloads the release asset, replaces the app folder and relaunches. */
   installUpdate(assetUrl: string, version: string): Promise<{ ok: boolean; error?: string }>;

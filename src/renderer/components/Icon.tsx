@@ -24,6 +24,15 @@ export function HomeIcon({ size = 19 }: IconProps) {
   );
 }
 
+export function LogsIcon({ size = 19 }: IconProps) {
+  return (
+    <svg {...frame(size)}>
+      <rect x="3.2" y="4.4" width="17.6" height="15.2" rx="2.2" />
+      <path d="M7 9.4h4.6M7 13h3.2M7 16.6h6.6" />
+    </svg>
+  );
+}
+
 export function VersionsIcon({ size = 19 }: IconProps) {
   return (
     <svg {...frame(size)}>

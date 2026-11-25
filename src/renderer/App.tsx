@@ -9,7 +9,14 @@ import type {
   VersionSummary,
 } from '../shared/api';
 import { defaultInstance, INSTANCE_LOADERS } from '../shared/instances';
-import { HomeIcon, MoreIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
+import {
+  HomeIcon,
+  LogsIcon,
+  MoreIcon,
+  SearchIcon,
+  SettingsIcon,
+  VersionsIcon,
+} from './components/Icon';
 import { HomeView } from './views/HomeView';
 import { InstanceView } from './views/InstanceView';
 import { InstancesView, type InstanceCard } from './views/InstancesView';
@@ -63,6 +70,7 @@ export function App() {
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const logsPanelRef = useRef<HTMLDivElement | null>(null);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [headerPhoto, setHeaderPhoto] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [accountMenu, setAccountMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<InstanceEntry | null>(null);
@@ -418,6 +426,30 @@ export function App() {
 
   useEffect(() => window.prime.onUpdateProgress(setUpdatePercent), []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!config?.headerImage) {
+      setHeaderPhoto(null);
+      return;
+    }
+    void window.prime
+      .headerImage(config.headerImage)
+      .then((data) => {
+        if (!cancelled) setHeaderPhoto(data);
+      })
+      .catch(() => {
+        if (!cancelled) setHeaderPhoto(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.headerImage]);
+
+  const pickHeaderPhoto = useCallback(async () => {
+    const picked = await window.prime.pickHeaderImage();
+    if (picked) await patchConfig({ headerImage: picked });
+  }, [patchConfig]);
+
   // One GitHub check per launch; a release the user skipped is not offered again.
   useEffect(() => {
     const skipped = config?.skippedUpdateVersion ?? null;
@@ -465,7 +497,31 @@ export function App() {
           P
         </div>
         <nav className="rail-nav">
-          {NAV.map(({ id, label, Icon }) => (
+          {NAV.slice(0, 2).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-current={view === id ? 'page' : undefined}
+              className={view === id ? 'rail-btn active' : 'rail-btn'}
+              onClick={() => setView(id)}
+            >
+              <Icon />
+            </button>
+          ))}
+          <button
+            type="button"
+            title="Logs"
+            aria-label="Logs"
+            aria-pressed={logsOpen}
+            className={logsOpen ? 'rail-btn rail-logs active' : 'rail-btn rail-logs'}
+            onClick={() => setLogsOpen((open) => !open)}
+          >
+            <LogsIcon />
+            {running ? <span className="rail-dot" aria-hidden="true" /> : null}
+          </button>
+          {NAV.slice(2).map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
@@ -503,18 +559,6 @@ export function App() {
               }}
             />
           </label>
-
-          <button
-            type="button"
-            className={logsOpen ? 'logs-toggle on' : 'logs-toggle'}
-            aria-label="Logs"
-            aria-pressed={logsOpen}
-            title="Logs"
-            onClick={() => setLogsOpen((open) => !open)}
-          >
-            Logs
-            {running ? <span className="logs-dot" aria-hidden="true" /> : null}
-          </button>
 
           {update?.status === 'available' ? (
             <button
@@ -611,6 +655,9 @@ export function App() {
               onBrowseAll={() => setView('instances')}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}
+              headerPhoto={headerPhoto}
+              onPickHeaderPhoto={() => void pickHeaderPhoto()}
+              onRemoveHeaderPhoto={() => void patchConfig({ headerImage: null })}
             />
           ) : view === 'instance' && activeInstance ? (
             <InstanceView
