@@ -1,6 +1,6 @@
 {
   "name": "prime-client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Prime - a fast, no-nonsense Minecraft Java launcher",
   "main": "dist/main/index.js",
