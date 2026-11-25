@@ -2,7 +2,11 @@
   "name": "prime-client",
   "version": "1.3.0",
   "private": true,
-  "description": "Prime - a fast, no-nonsense Minecraft Java launcher",
+  "description": "Prime (client side) - a fast, no-nonsense Minecraft Java launcher",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dnbdj/Prime-Client-Side"
+  },
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently -k -n renderer,electron -c cyan,magenta \"npm:dev:renderer\" \"npm:dev:electron\"",

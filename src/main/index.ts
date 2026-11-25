@@ -32,6 +32,7 @@ import {
   startDeviceFlow,
 } from './auth';
 import { loadCatalog, lookupError, withCode } from './errorCodes';
+import { installUpdate } from './updater';
 import { discoverJava, verifyJava } from './java';
 import { listVersions } from './install';
 import { installLoader, listBtaVersions, type LoaderKind } from './loaders';
@@ -516,6 +517,19 @@ ipcMain.handle('prime:kill', () => {
 });
 
 ipcMain.handle('prime:auth:account', () => currentAccount());
+
+ipcMain.handle('prime:update:install', async (_event, assetUrl: string, version: string) => {
+  try {
+    return await installUpdate(String(assetUrl ?? ''), String(version ?? ''), (percent) =>
+      send('prime:update:progress', percent),
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: withCode(error instanceof Error ? error.message : String(error)),
+    };
+  }
+});
 
 ipcMain.handle('prime:errors:catalog', () => loadCatalog());
 

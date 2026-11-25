@@ -295,6 +295,9 @@ export type PrimeApi = {
   lookupError(code: string): Promise<ErrorEntry | null>;
   appVersion(): Promise<string>;
   checkUpdates(): Promise<UpdateStatus>;
+  /** Downloads the release asset, replaces the app folder and relaunches. */
+  installUpdate(assetUrl: string, version: string): Promise<{ ok: boolean; error?: string }>;
+  onUpdateProgress(cb: (percent: number) => void): () => void;
   watcherStatus(): Promise<WatcherStatus>;
   /** Registers the watcher with the Windows Task Scheduler. */
   scheduleWatcher(): Promise<WatcherStatus>;

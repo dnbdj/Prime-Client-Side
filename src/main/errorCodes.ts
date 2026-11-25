@@ -11,7 +11,8 @@ import type { ErrorEntry } from '../shared/api';
 
 export type { ErrorEntry };
 
-const SOURCE = 'https://raw.githubusercontent.com/dnbdj/Prime-client/main/docs/error-codes.json';
+const SOURCE =
+  'https://raw.githubusercontent.com/dnbdj/Prime-Client-Side/main/docs/error-codes.json';
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 
 function cachePath(): string {

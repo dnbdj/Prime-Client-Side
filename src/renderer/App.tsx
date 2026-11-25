@@ -67,6 +67,8 @@ export function App() {
   const [appVersion, setAppVersion] = useState('');
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [updatePrompt, setUpdatePrompt] = useState(false);
+  const [updatePercent, setUpdatePercent] = useState<number | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const appendLog = useCallback((line: string) => {
     setLogs((current) => {
@@ -398,6 +400,8 @@ export function App() {
     };
   }, [accountMenu]);
 
+  useEffect(() => window.prime.onUpdateProgress(setUpdatePercent), []);
+
   // One GitHub check per launch; a release the user skipped is not offered again.
   useEffect(() => {
     const skipped = config?.skippedUpdateVersion ?? null;
@@ -694,21 +698,49 @@ export function App() {
             <h2>Prime {update.version} is out</h2>
             <p className="note">You are on {appVersion || 'an older build'}.</p>
             {update.notes ? <pre className="update-notes">{update.notes}</pre> : null}
+            {updatePercent !== null ? (
+              <div className="progress-track setup-status-track">
+                <div className="progress-fill" style={{ width: `${updatePercent}%` }} />
+              </div>
+            ) : null}
+            {updateError ? <p className="note danger-text">{updateError}</p> : null}
+            <p className="note">
+              Prime downloads the new build, replaces its own files and restarts. Settings,
+              instances and accounts are stored outside the app folder and are kept.
+            </p>
             <div className="update-actions">
               <button
                 type="button"
                 className="btn-primary"
+                disabled={updatePercent !== null}
                 onClick={() => {
-                  setUpdatePrompt(false);
-                  const target = update.assetUrl ?? update.url;
-                  if (target) void window.prime.openExternal(target);
+                  const asset = update.assetUrl;
+                  if (!asset) {
+                    if (update.url) void window.prime.openExternal(update.url);
+                    return;
+                  }
+                  setUpdateError(null);
+                  setUpdatePercent(0);
+                  void window.prime
+                    .installUpdate(asset, update.version)
+                    .then((result) => {
+                      if (!result.ok) {
+                        setUpdatePercent(null);
+                        setUpdateError(result.error ?? 'The update did not start.');
+                      }
+                    })
+                    .catch((err: unknown) => {
+                      setUpdatePercent(null);
+                      setUpdateError(describeError(err));
+                    });
                 }}
               >
-                {update.assetUrl ? 'Download update' : 'Open release page'}
+                {updatePercent === null ? 'Update now' : `Updating… ${updatePercent}%`}
               </button>
               <button
                 type="button"
                 className="btn-ghost"
+                disabled={updatePercent !== null}
                 onClick={() => setUpdatePrompt(false)}
               >
                 Later
@@ -716,6 +748,7 @@ export function App() {
               <button
                 type="button"
                 className="btn-ghost"
+                disabled={updatePercent !== null}
                 onClick={() => {
                   setUpdatePrompt(false);
                   void patchConfig({ skippedUpdateVersion: update.version });

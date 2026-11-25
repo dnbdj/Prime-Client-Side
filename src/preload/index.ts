@@ -80,6 +80,12 @@ const api: PrimeApi = {
   lookupError: (code) => ipcRenderer.invoke('prime:errors:lookup', code) as Promise<ErrorEntry | null>,
   appVersion: () => ipcRenderer.invoke('prime:app:version') as Promise<string>,
   checkUpdates: () => ipcRenderer.invoke('prime:update:check') as Promise<UpdateStatus>,
+  installUpdate: (assetUrl, version) =>
+    ipcRenderer.invoke('prime:update:install', assetUrl, version) as Promise<{
+      ok: boolean;
+      error?: string;
+    }>,
+  onUpdateProgress: (cb) => subscribe<number>('prime:update:progress', cb),
   watcherStatus: () => ipcRenderer.invoke('prime:watcher:status') as Promise<WatcherStatus>,
   scheduleWatcher: () => ipcRenderer.invoke('prime:watcher:schedule') as Promise<WatcherStatus>,
   unscheduleWatcher: () => ipcRenderer.invoke('prime:watcher:unschedule') as Promise<WatcherStatus>,

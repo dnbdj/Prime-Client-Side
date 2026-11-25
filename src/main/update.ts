@@ -35,8 +35,12 @@ export function isNewer(candidate: string, current: string): boolean {
 
 const TIMEOUT_MS = 8000;
 
-/** Releases live on this project's GitHub; a custom feed still wins if set. */
-export const RELEASE_REPO = 'dnbdj/Prime-client';
+/**
+ * Releases live on the client-side repository. Prime is split in two: this repo
+ * (the launcher) and dnbdj/Prime-Server-Side (the server mod), so the update
+ * check must never drift onto the server repo's tags.
+ */
+export const RELEASE_REPO = 'dnbdj/Prime-Client-Side';
 
 type GithubRelease = {
   tag_name?: unknown;
