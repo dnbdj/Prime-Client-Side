@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type {
-  InstanceEntry,
-  PrimeConfig,
-  ProgressEvent,
-  VersionSummary,
-} from '../../shared/api';
+import type { InstanceEntry, PrimeConfig, ProgressEvent, VersionSummary } from '../../shared/api';
 import { InstanceWizard } from '../components/InstanceWizard';
-import { shortDate, timeAgo } from '../format';
+import { timeAgo } from '../format';
 
 export type InstanceCard = {
   entry: InstanceEntry;
@@ -18,20 +13,17 @@ type Props = {
   config: PrimeConfig | null;
   versions: VersionSummary[];
   instances: InstanceCard[];
-  selected: VersionSummary | null;
   progress: ProgressEvent | null;
   percent: number;
   busy: boolean;
   running: boolean;
   loadingVersions: boolean;
   filter: string;
-  onSelectInstance: (id: string) => void;
   onAddInstance: (entry: InstanceEntry) => void;
-  onVersionJvmArgs: (versionId: string, value: string) => void;
-  onInstallLoader: (kind: 'fabric' | 'forge') => void;
-  onReloadVersions: () => Promise<void> | void;
-  onLaunch: () => void;
+  onOpenInstance: (entry: InstanceEntry) => void;
+  onPlay: (versionId: string) => void;
   onStop: () => void;
+  onReloadVersions: () => Promise<void> | void;
 };
 
 const LOADER_LABEL: Record<InstanceEntry['loader'], string> = {
@@ -45,20 +37,17 @@ export function InstancesView({
   config,
   versions,
   instances,
-  selected,
   progress,
   percent,
   busy,
   running,
   loadingVersions,
   filter,
-  onSelectInstance,
   onAddInstance,
-  onVersionJvmArgs,
-  onInstallLoader,
-  onReloadVersions,
-  onLaunch,
+  onOpenInstance,
+  onPlay,
   onStop,
+  onReloadVersions,
 }: Props) {
   const [creating, setCreating] = useState(false);
 
@@ -79,9 +68,6 @@ export function InstancesView({
         : instances,
     [instances, needle],
   );
-
-  const active = instances.find((card) => card.version.id === config?.versionId) ?? null;
-  const detail = selected;
 
   if (creating) {
     return (
@@ -108,7 +94,13 @@ export function InstancesView({
           <span className="chip subtle">
             {instances.length} instance{instances.length === 1 ? '' : 's'}
           </span>
-          <span className="muted">{running ? 'In game' : 'Ready to play'}</span>
+          <span className="muted">
+            {progress
+              ? `${progress.label} · ${percent}%`
+              : running
+                ? 'In game'
+                : 'Ready to play'}
+          </span>
           <button type="button" className="btn-ghost" onClick={() => void onReloadVersions()}>
             Reload
           </button>
@@ -126,134 +118,65 @@ export function InstancesView({
                   : 'No instances match that filter.'}
               </p>
             ) : (
-              cards.map(({ entry, version, playedAt }) => (
-                <button
-                  type="button"
-                  key={`${entry.name}-${entry.versionId}`}
-                  className={version.id === config?.versionId ? 'vcard selected' : 'vcard'}
-                  onClick={() => onSelectInstance(version.id)}
-                >
-                  <span
-                    className={`vcard-banner ${version.loader ?? version.type}`}
-                    style={{ backgroundColor: entry.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="vcard-body">
-                    <span className="chip subtle">{LOADER_LABEL[entry.loader]}</span>
-                    <strong className="vcard-id">{entry.name}</strong>
-                    <span className="vcard-date">
-                      {entry.name === entry.versionId ? '' : `${entry.versionId} · `}
-                      {playedAt ? `played ${timeAgo(playedAt)}` : 'added to your instances'}
-                    </span>
-                  </span>
-                </button>
-              ))
+              cards.map(({ entry, version, playedAt }) => {
+                const active = version.id === config?.versionId;
+                const inGame = running && active;
+                return (
+                  <div
+                    key={`${entry.name}-${entry.versionId}`}
+                    className={[
+                      'vcard',
+                      active ? 'selected' : '',
+                      inGame ? 'running' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <button
+                      type="button"
+                      className="vcard-open"
+                      onClick={() => onOpenInstance(entry)}
+                      aria-label={`Open ${entry.name}`}
+                    >
+                      <span
+                        className={`vcard-banner ${version.loader ?? version.type}`}
+                        style={{ backgroundColor: entry.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="vcard-body">
+                        <span className="chip subtle">{LOADER_LABEL[entry.loader]}</span>
+                        <strong className="vcard-id">{entry.name}</strong>
+                        <span className="vcard-date">
+                          {entry.name === entry.versionId ? '' : `${entry.versionId} · `}
+                          {playedAt ? `played ${timeAgo(playedAt)}` : 'added to your instances'}
+                        </span>
+                      </span>
+                    </button>
+
+                    <div className="vcard-foot">
+                      {inGame ? (
+                        <button type="button" className="vcard-play danger" onClick={onStop}>
+                          Stop
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="vcard-play"
+                          disabled={busy || running}
+                          onClick={() => onPlay(version.id)}
+                        >
+                          Play
+                        </button>
+                      )}
+                      <span className="vcard-state">{inGame ? 'In game' : 'Open'}</span>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
       </section>
-
-      <aside className="panel detail">
-        <div className="panel-head">
-          <h2 className="panel-title">
-            {active?.entry.name ?? detail?.id ?? 'No instance selected'}
-          </h2>
-          <span className="chip subtle">
-            {active ? LOADER_LABEL[active.entry.loader] : (detail?.loader ?? detail?.type ?? '—')}
-          </span>
-        </div>
-        <div className="panel-body">
-          <dl className="meta-list">
-            <div>
-              <dt>Version</dt>
-              <dd>{detail?.id ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Released</dt>
-              <dd>{detail ? shortDate(detail.releaseTime) : '—'}</dd>
-            </div>
-            <div>
-              <dt>Memory</dt>
-              <dd>{config ? `${config.ramMb} MB` : '—'}</dd>
-            </div>
-            <div>
-              <dt>Java</dt>
-              <dd>{config?.javaPath ? 'Custom' : 'Auto-detect'}</dd>
-            </div>
-            <div>
-              <dt>Player</dt>
-              <dd>{config?.username || 'Player'}</dd>
-            </div>
-          </dl>
-
-          {detail ? (
-            <>
-              <label className="field">
-                <span>JVM flags for {detail.id}</span>
-                <input
-                  value={config?.versionJvmArgs?.[detail.id] ?? ''}
-                  spellCheck={false}
-                  placeholder={config?.jvmArgs.trim() || 'Global flags from Settings'}
-                  onChange={(event) => onVersionJvmArgs(detail.id, event.target.value)}
-                />
-              </label>
-              <p className="note">Leave empty to use the global flags from Settings.</p>
-            </>
-          ) : null}
-
-          {detail && !detail.loader ? (
-            <div className="loader-install">
-              <span className="loader-install-title">Modded loaders</span>
-              <div className="chip-row">
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  disabled={busy}
-                  onClick={() => onInstallLoader('fabric')}
-                >
-                  Install Fabric
-                </button>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  disabled={busy}
-                  onClick={() => onInstallLoader('forge')}
-                >
-                  Install Forge
-                </button>
-              </div>
-              <p className="note">Adds a {detail.id} loader profile as its own instance.</p>
-            </div>
-          ) : null}
-
-          {running ? (
-            <button type="button" className="btn-primary danger" onClick={onStop}>
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={busy || !config?.versionId}
-              onClick={onLaunch}
-            >
-              {busy ? 'Launching…' : 'Play this instance'}
-            </button>
-          )}
-
-          <div className="progress">
-            <div className="progress-meta">
-              <span>{progress?.label ?? 'Ready'}</span>
-              <span>{progress ? `${percent}%` : ''}</span>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${progress ? percent : 0}%` }} />
-            </div>
-          </div>
-
-          <p className="note">The first launch downloads this version's game files.</p>
-        </div>
-      </aside>
     </div>
   );
 }

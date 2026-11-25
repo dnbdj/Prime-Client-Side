@@ -865,6 +865,8 @@ input::placeholder {
 .vcard {
   display: flex;
   flex-direction: column;
+  /* Buttons default to flex-start, which collapses the banner to 0 width. */
+  align-items: stretch;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -872,11 +874,10 @@ input::placeholder {
   overflow: hidden;
   text-align: left;
   color: var(--text);
-  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
 
 .vcard:hover {
-  transform: translateY(-2px);
   border-color: var(--line-strong);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
 }
@@ -884,6 +885,65 @@ input::placeholder {
 .vcard.selected {
   border-color: rgba(27, 217, 106, 0.55);
   box-shadow: 0 0 0 1px rgba(27, 217, 106, 0.35);
+}
+
+.vcard.running {
+  border-color: var(--green);
+}
+
+/* The body of an instance card opens the instance page; Play lives below it. */
+.vcard-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vcard-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.vcard-play {
+  height: 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--green);
+  color: #06230f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vcard-play:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.vcard-play:disabled {
+  background: var(--surface-3);
+  color: var(--dimmer);
+  cursor: not-allowed;
+}
+
+.vcard-play.danger {
+  background: var(--danger);
+  color: #2b0a0a;
+}
+
+.vcard-state {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 11px;
 }
 
 .vcard-banner {
@@ -963,7 +1023,7 @@ input::placeholder {
 .browse {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -1227,10 +1287,6 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 @media (max-width: 1040px) {
-  .browse {
-    grid-template-columns: minmax(0, 1fr) 290px;
-  }
-
   .hero-actions {
     width: 210px;
     flex-basis: 210px;
@@ -1931,5 +1987,159 @@ input[type='range']::-webkit-slider-thumb {
 
   .mm-col {
     min-width: 104px;
+  }
+}
+
+/* --------------------------------------------------------------- instance -- */
+.instance-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.back-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.instance-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.instance-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.instance-mark {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 14px;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+.instance-hero-text {
+  min-width: 0;
+}
+
+.instance-hero-text h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.instance-hero-text .muted {
+  margin: 0;
+}
+
+.instance-hero-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 190px;
+}
+
+.instance-progress {
+  width: 100%;
+}
+
+.instance-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mod-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.mod-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.mod-size {
+  margin-left: auto;
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-remove {
+  flex: none;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.mod-remove:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+@media (max-width: 1040px) {
+  .instance-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .instance-hero {
+    flex-wrap: wrap;
+  }
+
+  .instance-hero-actions {
+    align-items: stretch;
+    min-width: 0;
+    flex: 1;
   }
 }

@@ -7,13 +7,14 @@ import type {
   ProgressEvent,
   VersionSummary,
 } from '../shared/api';
-import { defaultInstance } from '../shared/instances';
+import { defaultInstance, INSTANCE_LOADERS } from '../shared/instances';
 import { HomeIcon, MoreIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
 import { HomeView } from './views/HomeView';
+import { InstanceView } from './views/InstanceView';
 import { InstancesView, type InstanceCard } from './views/InstancesView';
 import { SettingsView } from './views/SettingsView';
 
-type View = 'home' | 'instances' | 'settings';
+type View = 'home' | 'instances' | 'instance' | 'settings';
 
 const NAV = [
   { id: 'home' as const, label: 'Home', Icon: HomeIcon },
@@ -24,6 +25,7 @@ const NAV = [
 const TITLES: Record<View, { title: string; subtitle: string }> = {
   home: { title: 'Home', subtitle: 'Pick a version and drop in' },
   instances: { title: 'Instances', subtitle: 'Your Minecraft builds, ready to play' },
+  instance: { title: 'Instance', subtitle: 'Mods, flags and everything about this build' },
   settings: { title: 'Settings', subtitle: 'Stored locally on this machine' },
 };
 
@@ -39,6 +41,7 @@ function describeError(error: unknown): string {
 
 export function App() {
   const [view, setView] = useState<View>('home');
+  const [instanceId, setInstanceId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [config, setConfig] = useState<PrimeConfig | null>(null);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
@@ -142,28 +145,32 @@ export function App() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [logs, view]);
 
-  const handleLaunch = useCallback(async () => {
-    if (!config?.versionId || busy || running) return;
-    setBusy(true);
-    setError(null);
-    setLogs([]);
-    setProgress({ phase: 'meta', current: 0, total: 1, label: 'Preparing launch' });
+  const handleLaunch = useCallback(
+    async (versionId?: string) => {
+      const target = versionId ?? config?.versionId;
+      if (!target || busy || running) return;
+      setBusy(true);
+      setError(null);
+      setLogs([]);
+      setProgress({ phase: 'meta', current: 0, total: 1, label: 'Preparing launch' });
 
-    const result = await window.prime.launch(config.versionId);
-    setBusy(false);
+      const result = await window.prime.launch(target);
+      setBusy(false);
 
-    if (!result.ok) {
-      setProgress(null);
-      setError(describeError(result.error ?? 'Launch failed.'));
-      return;
-    }
-    setRunning(true);
-    // The main process records the launch for the Recently played list.
-    await window.prime
-      .getConfig()
-      .then(setConfig)
-      .catch(() => undefined);
-  }, [busy, config?.versionId, running]);
+      if (!result.ok) {
+        setProgress(null);
+        setError(describeError(result.error ?? 'Launch failed.'));
+        return;
+      }
+      setRunning(true);
+      // The main process records the launch for the Recently played list.
+      await window.prime
+        .getConfig()
+        .then(setConfig)
+        .catch(() => undefined);
+    },
+    [busy, config?.versionId, running],
+  );
 
   const handleStop = useCallback(async () => {
     await window.prime.kill();
@@ -172,12 +179,13 @@ export function App() {
   }, []);
 
   const handleInstallLoader = useCallback(
-    async (kind: 'fabric' | 'forge') => {
-      if (!config?.versionId || busy) return;
+    async (kind: 'fabric' | 'forge', gameVersion?: string) => {
+      const target = gameVersion ?? config?.versionId;
+      if (!target || busy) return;
       setBusy(true);
       setError(null);
       setProgress({ phase: 'loader', current: 0, total: 1, label: `Installing ${kind}` });
-      const result = await window.prime.installLoader(kind, config.versionId);
+      const result = await window.prime.installLoader(kind, target);
       setBusy(false);
       if (!result.ok) {
         setProgress(null);
@@ -241,6 +249,38 @@ export function App() {
     },
     [config?.instances, patchConfig],
   );
+
+  /** Edits that describe one instance and nothing else: name, colour. */
+  const updateInstance = useCallback(
+    async (versionId: string, patch: Partial<InstanceEntry>) => {
+      const card = instances.find((candidate) => candidate.entry.versionId === versionId);
+      if (!card) return;
+      const nextEntry = { ...card.entry, ...patch };
+      const current = config?.instances ?? [];
+      const exists = current.some((entry) => entry.versionId === versionId);
+      const next = exists
+        ? current.map((entry) => (entry.versionId === versionId ? nextEntry : entry))
+        : [nextEntry, ...current];
+      await patchConfig({ instances: next });
+    },
+    [config?.instances, instances, patchConfig],
+  );
+
+  const activeInstance = useMemo(
+    () => instances.find((card) => card.entry.versionId === instanceId) ?? null,
+    [instanceId, instances],
+  );
+
+  const heading =
+    view === 'instance' && activeInstance
+      ? {
+          title: activeInstance.entry.name,
+          subtitle: `${activeInstance.version.id} · ${
+            INSTANCE_LOADERS.find((loader) => loader.id === activeInstance.entry.loader)?.label ??
+            'Vanilla'
+          }`,
+        }
+      : TITLES[view];
 
   const recentInstances = useMemo(() => {
     return (config?.recent ?? [])
@@ -321,8 +361,8 @@ export function App() {
       <div className="main">
         <header className="topbar">
           <div className="page-title">
-            <h1>{TITLES[view].title}</h1>
-            <span>{TITLES[view].subtitle}</span>
+            <h1>{heading.title}</h1>
+            <span>{heading.subtitle}</span>
           </div>
 
           <label className="search">
@@ -433,25 +473,46 @@ export function App() {
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}
             />
-          ) : view === 'instances' ? (
+          ) : view === 'instance' && activeInstance ? (
+            <InstanceView
+              entry={activeInstance.entry}
+              version={activeInstance.version}
+              config={config}
+              running={running && config?.versionId === activeInstance.version.id}
+              busy={busy}
+              progress={progress}
+              percent={percent}
+              onBack={() => {
+                setInstanceId(null);
+                setView('instances');
+              }}
+              onPlay={() => void handleLaunch(activeInstance.version.id)}
+              onStop={() => void handleStop()}
+              onEdit={(patch) => void updateInstance(activeInstance.version.id, patch)}
+              onJvmArgs={(value) => setVersionJvmArgs(activeInstance.version.id, value)}
+              onInstallLoader={(kind) =>
+                void handleInstallLoader(kind, activeInstance.version.id)
+              }
+            />
+          ) : view === 'instances' || (view === 'instance' && !activeInstance) ? (
             <InstancesView
               config={config}
               versions={versions}
               instances={instances}
-              selected={selected}
               progress={progress}
               percent={percent}
               busy={busy}
               running={running}
               loadingVersions={loadingVersions}
               filter={filter}
-              onSelectInstance={(id) => void patchConfig({ versionId: id })}
               onAddInstance={(entry) => void addInstance(entry)}
-              onVersionJvmArgs={setVersionJvmArgs}
-              onInstallLoader={(kind) => void handleInstallLoader(kind)}
-              onReloadVersions={loadVersions}
-              onLaunch={() => void handleLaunch()}
+              onOpenInstance={(entry) => {
+                setInstanceId(entry.versionId);
+                setView('instance');
+              }}
+              onPlay={(id) => void handleLaunch(id)}
               onStop={() => void handleStop()}
+              onReloadVersions={loadVersions}
             />
           ) : (
             <SettingsView

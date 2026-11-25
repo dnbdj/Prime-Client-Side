@@ -35,6 +35,12 @@ export type LoaderInstallResult = {
   versionId?: string;
 };
 
+/** A jar sitting in the game folder's mods directory. */
+export type ModFile = {
+  name: string;
+  size: number;
+};
+
 /** What the launcher window does once a game process is running. */
 export type AfterLaunch = 'keep' | 'minimise' | 'close';
 
@@ -132,6 +138,11 @@ export type PrimeApi = {
   launch(versionId: string): Promise<LaunchResult>;
   installLoader(kind: LoaderKind, gameVersion: string): Promise<LoaderInstallResult>;
   kill(): Promise<boolean>;
+  listMods(): Promise<ModFile[]>;
+  addMods(): Promise<ModFile[]>;
+  removeMod(name: string): Promise<ModFile[]>;
+  modsDir(): Promise<string>;
+  openMods(): Promise<void>;
   openPath(path: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   defaultGameDir(): Promise<string>;

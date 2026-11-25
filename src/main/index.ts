@@ -1,7 +1,15 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
-import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
-import { join } from 'node:path';
-import type { LaunchResult, PrimeConfig, ProgressEvent } from '../shared/api';
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron';
+import {
+  copyFileSync,
+  createWriteStream,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  type WriteStream,
+} from 'node:fs';
+import { basename, join } from 'node:path';
+import type { LaunchResult, ModFile, PrimeConfig, ProgressEvent } from '../shared/api';
 import {
   cancelDeviceFlow,
   currentAccount,
@@ -128,6 +136,67 @@ ipcMain.handle('prime:update:check', async () =>
 
 ipcMain.handle('prime:open', async (_event, target: string) => {
   if (typeof target === 'string' && target.length > 0) await shell.openPath(target);
+});
+
+/**
+ * Mods live in the game folder Minecraft actually boots from, so they load for
+ * every instance that shares that folder.
+ */
+function modsDirectory(): string {
+  const config = loadConfig();
+  return join(config.gameDir ?? minecraftRoot(), 'mods');
+}
+
+function listModFiles(): ModFile[] {
+  const dir = modsDirectory();
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.(jar|zip)$/i.test(entry.name))
+      .map((entry) => ({ name: entry.name, size: statSync(join(dir, entry.name)).size }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+ipcMain.handle('prime:mods:list', () => listModFiles());
+
+ipcMain.handle('prime:mods:dir', () => modsDirectory());
+
+ipcMain.handle('prime:mods:open', async () => {
+  const dir = modsDirectory();
+  mkdirSync(dir, { recursive: true });
+  await shell.openPath(dir);
+});
+
+ipcMain.handle('prime:mods:add', async (): Promise<ModFile[]> => {
+  const options: OpenDialogOptions = {
+    title: 'Add mods',
+    buttonLabel: 'Add to mods',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Mod jars', extensions: ['jar', 'zip'] }],
+  };
+  const picked = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  if (picked.canceled || picked.filePaths.length === 0) return listModFiles();
+
+  const dir = modsDirectory();
+  mkdirSync(dir, { recursive: true });
+  for (const file of picked.filePaths) {
+    try {
+      copyFileSync(file, join(dir, basename(file)));
+    } catch {
+      // A file that vanished or is locked is skipped; the list shows what landed.
+    }
+  }
+  return listModFiles();
+});
+
+ipcMain.handle('prime:mods:remove', (_event, name: string): ModFile[] => {
+  if (typeof name !== 'string' || name.length === 0 || name !== basename(name)) return listModFiles();
+  rmSync(join(modsDirectory(), name), { force: true });
+  return listModFiles();
 });
 
 ipcMain.handle('prime:external', async (_event, url: string) => {
