@@ -24,6 +24,10 @@ Major numbers are reserved for breaking or era-changing work. Everything else
 that ships is a decimal bump. The `milestone-NN` tags below are the raw commit
 history from before numbered releases existed; they stay in place for archaeology.
 
+| Release | Version | Date | Summary |
+| --- | --- | --- | --- |
+| [v1](https://github.com/dnbdj/Prime-client/releases/tag/v1) | 1.0.0 | 2026-11-25 | First numbered release: installs and launches Minecraft, Fabric and Forge; per-instance folders, mods and settings |
+
 ## Pre-versioning snapshots
 
 This project originally had no package version bumps: `package.json` has read `0.1.0` since
