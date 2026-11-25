@@ -61,6 +61,8 @@ export function App() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
+  const logsPanelRef = useRef<HTMLDivElement | null>(null);
+  const [logsOpen, setLogsOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [accountMenu, setAccountMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<InstanceEntry | null>(null);
@@ -159,6 +161,20 @@ export function App() {
     const node = consoleRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [logs, view]);
+
+  useEffect(() => {
+    const node = logsPanelRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [logs, logsOpen]);
+
+  useEffect(() => {
+    if (!logsOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLogsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [logsOpen]);
 
   const handleLaunch = useCallback(
     async (versionId?: string, instanceId?: string) => {
@@ -488,6 +504,18 @@ export function App() {
             />
           </label>
 
+          <button
+            type="button"
+            className={logsOpen ? 'logs-toggle on' : 'logs-toggle'}
+            aria-label="Logs"
+            aria-pressed={logsOpen}
+            title="Logs"
+            onClick={() => setLogsOpen((open) => !open)}
+          >
+            Logs
+            {running ? <span className="logs-dot" aria-hidden="true" /> : null}
+          </button>
+
           {update?.status === 'available' ? (
             <button
               type="button"
@@ -647,6 +675,51 @@ export function App() {
           )}
         </main>
       </div>
+
+      {logsOpen ? (
+        <aside className="logs-panel" aria-label="Logs">
+          <div className="logs-head">
+            <div className="logs-title">
+              <h2>Logs</h2>
+              <span className={running ? 'chip green' : 'chip subtle'}>
+                {running ? 'Live' : 'Idle'}
+              </span>
+            </div>
+            <div className="logs-actions">
+              <span className="logs-count">
+                {logs.length ? `${logs.length} lines` : 'empty'}
+              </span>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={logs.length === 0}
+                onClick={() => setLogs([])}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn-ghost logs-close"
+                aria-label="Close logs"
+                onClick={() => setLogsOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <div className="logs-body" ref={logsPanelRef}>
+            {logs.length === 0 ? (
+              <p className="console-empty">Game and installer output appears here.</p>
+            ) : (
+              logs.map((line, index) => (
+                <div className="console-line" key={`${index}-${line.slice(0, 20)}`}>
+                  {line}
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+      ) : null}
 
       {confirmDelete ? (
         <div
