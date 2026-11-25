@@ -8,6 +8,27 @@ export type VersionSummary = {
 
 export type LoaderKind = 'fabric' | 'forge';
 
+/** How an instance was started: the plain game, a mod loader, or a modpack. */
+export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';
+
+export type InstanceContent = {
+  /** The game itself; always true. */
+  vanilla: boolean;
+  mods: boolean;
+  primeMod: boolean;
+};
+
+/** A named instance on the Instances page. */
+export type InstanceEntry = {
+  versionId: string;
+  name: string;
+  /** Card accent colour, hex. */
+  color: string;
+  loader: InstanceLoader;
+  content: InstanceContent;
+  createdAt: string;
+};
+
 export type LoaderInstallResult = {
   ok: boolean;
   error?: string;
@@ -32,8 +53,8 @@ export type PrimeConfig = {
   gameDir: string | null;
   /** Last selected version id. */
   versionId: string | null;
-  /** Instance version ids the user added, newest first. */
-  instances: string[];
+  /** Instance records, newest first. */
+  instances: InstanceEntry[];
   /** Instances that were actually played, newest first. */
   recent: RecentInstance[];
 };

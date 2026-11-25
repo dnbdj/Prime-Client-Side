@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PrimeConfig } from '../shared/api';
+import { normalizeInstances } from '../shared/instances';
 
 const DEFAULTS: PrimeConfig = {
   username: 'Player',
@@ -68,7 +69,9 @@ function withLock<T>(fn: () => T): T {
 export function loadConfig(): PrimeConfig {
   try {
     const parsed = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<PrimeConfig>;
-    return { ...DEFAULTS, ...parsed };
+    const merged = { ...DEFAULTS, ...parsed };
+    // Older configs stored a plain list of version ids for instances.
+    return { ...merged, instances: normalizeInstances(merged.instances) };
   } catch {
     return { ...DEFAULTS };
   }

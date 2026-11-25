@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  InstanceEntry,
   JavaCandidate,
   MinecraftAccount,
   PrimeConfig,
   ProgressEvent,
   VersionSummary,
 } from '../shared/api';
+import { defaultInstance } from '../shared/instances';
 import { HomeIcon, MoreIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
 import { HomeView } from './views/HomeView';
 import { InstancesView, type InstanceCard } from './views/InstancesView';
@@ -38,7 +40,6 @@ function describeError(error: unknown): string {
 export function App() {
   const [view, setView] = useState<View>('home');
   const [filter, setFilter] = useState('');
-  const [channel, setChannel] = useState<'release' | 'all'>('release');
   const [config, setConfig] = useState<PrimeConfig | null>(null);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [java, setJava] = useState<JavaCandidate[]>([]);
@@ -197,30 +198,46 @@ export function App() {
 
   const instances = useMemo<InstanceCard[]>(() => {
     const played = new Map((config?.recent ?? []).map((entry) => [entry.versionId, entry.playedAt]));
-    const ids: string[] = [];
-    const candidates = [
-      ...(config?.instances ?? []),
-      ...(config?.recent ?? []).map((entry) => entry.versionId),
-      config?.versionId ?? '',
-    ];
-    for (const id of candidates) {
-      if (id && !ids.includes(id)) ids.push(id);
+    const entries: InstanceEntry[] = [];
+    const seen = new Set<string>();
+    const push = (entry: InstanceEntry) => {
+      if (seen.has(entry.versionId)) return;
+      seen.add(entry.versionId);
+      entries.push(entry);
+    };
+
+    const loaderOf = (versionId: string): Partial<InstanceEntry> => {
+      const version = versions.find((candidate) => candidate.id === versionId);
+      return version?.loader ? { loader: version.loader } : {};
+    };
+
+    for (const entry of config?.instances ?? []) push(entry);
+    // Played versions and the last selection are instances even when the user
+    // never went through setup for them.
+    for (const entry of config?.recent ?? []) {
+      push(defaultInstance(entry.versionId, loaderOf(entry.versionId)));
     }
-    return ids
-      .map((id): InstanceCard | null => {
-        const version = versions.find((candidate) => candidate.id === id);
-        return version ? { version, playedAt: played.get(id) ?? null } : null;
+    if (config?.versionId) push(defaultInstance(config.versionId, loaderOf(config.versionId)));
+
+    return entries
+      .map((entry): InstanceCard | null => {
+        const version = versions.find((candidate) => candidate.id === entry.versionId);
+        return version ? { entry, version, playedAt: played.get(entry.versionId) ?? null } : null;
       })
       .filter((card): card is InstanceCard => card !== null);
   }, [config?.instances, config?.recent, config?.versionId, versions]);
 
   const addInstance = useCallback(
-    async (versionId: string) => {
+    async (entry: InstanceEntry) => {
       const current = config?.instances ?? [];
-      await patchConfig({
-        instances: [versionId, ...current.filter((id) => id !== versionId)],
-        versionId,
-      });
+      const next = [
+        entry,
+        ...current.filter(
+          (candidate) =>
+            candidate.versionId !== entry.versionId || candidate.name !== entry.name,
+        ),
+      ];
+      await patchConfig({ instances: next, versionId: entry.versionId });
     },
     [config?.instances, patchConfig],
   );
@@ -428,10 +445,8 @@ export function App() {
               running={running}
               loadingVersions={loadingVersions}
               filter={filter}
-              channel={channel}
-              onChannel={setChannel}
               onSelectInstance={(id) => void patchConfig({ versionId: id })}
-              onAddInstance={(id) => void addInstance(id)}
+              onAddInstance={(entry) => void addInstance(entry)}
               onVersionJvmArgs={setVersionJvmArgs}
               onInstallLoader={(kind) => void handleInstallLoader(kind)}
               onReloadVersions={() => void loadVersions()}

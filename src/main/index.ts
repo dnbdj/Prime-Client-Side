@@ -14,6 +14,7 @@ import { discoverJava, verifyJava } from './java';
 import { listVersions } from './install';
 import { installLoader, type LoaderKind } from './loaders';
 import { launch, type LaunchHandle } from './launch';
+import { defaultInstance } from '../shared/instances';
 import { loadConfig, saveConfig } from './store';
 import { checkForUpdates } from './update';
 
@@ -106,12 +107,12 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
       (event: ProgressEvent) => send('prime:progress', event),
       log,
     );
+    const previous = loadConfig();
     saveConfig({
       versionId: installed.versionId,
-      instances: [
-        installed.versionId,
-        ...(loadConfig().instances ?? []).filter((id) => id !== installed.versionId),
-      ],
+      instances: previous.instances.some((entry) => entry.versionId === installed.versionId)
+        ? previous.instances
+        : [defaultInstance(installed.versionId, { loader: kind }), ...previous.instances],
     });
     return { ok: true, versionId: installed.versionId };
   } catch (error) {
@@ -214,7 +215,11 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     saveConfig({
       versionId,
       recent,
-      instances: [versionId, ...(config.instances ?? []).filter((id) => id !== versionId)],
+      // Keep a named instance the user made for this version; only add a plain
+      // record when the version was never set up.
+      instances: config.instances.some((entry) => entry.versionId === versionId)
+        ? config.instances
+        : [defaultInstance(versionId), ...config.instances],
     });
 
     if (config.closeOnLaunch) {
