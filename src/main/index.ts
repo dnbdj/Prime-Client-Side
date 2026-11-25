@@ -88,7 +88,7 @@ ipcMain.handle('prime:config:get', () => loadConfig());
 
 ipcMain.handle('prime:config:set', (_event, patch: Partial<PrimeConfig>) => saveConfig(patch));
 
-ipcMain.handle('prime:versions', async () => listVersions());
+ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 
 ipcMain.handle('prime:java:list', async () => discoverJava());
 

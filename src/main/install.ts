@@ -55,9 +55,34 @@ export type Prepared = {
   assetIndexId: string;
 };
 
-export async function listVersions(): Promise<VersionSummary[]> {
-  const manifest = await fetchJson<Manifest>(VERSION_MANIFEST_URL);
+function toSummaries(manifest: Manifest): VersionSummary[] {
   return manifest.versions.map(({ id, type, releaseTime }) => ({ id, type, releaseTime }));
+}
+
+/**
+ * Fetches the version manifest, keeping a copy on disk so the version list
+ * still loads when the network (or just Mojang) is unavailable.
+ */
+export async function listVersions(rootDir?: string): Promise<VersionSummary[]> {
+  const cachePath = rootDir ? join(rootDir, 'version_manifest_v2.json') : null;
+  try {
+    const manifest = await fetchJson<Manifest>(VERSION_MANIFEST_URL);
+    if (cachePath) {
+      await fs.mkdir(rootDir as string, { recursive: true });
+      await fs.writeFile(cachePath, JSON.stringify(manifest)).catch(() => undefined);
+    }
+    return toSummaries(manifest);
+  } catch (error) {
+    if (cachePath) {
+      try {
+        const cached = JSON.parse(await fs.readFile(cachePath, 'utf8')) as Manifest;
+        return toSummaries(cached);
+      } catch {
+        // No usable cache: surface the original network error.
+      }
+    }
+    throw error;
+  }
 }
 
 export async function fetchVersion(versionId: string): Promise<VersionJson> {
@@ -115,10 +140,14 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
   if (version.downloads?.client && needsDownload(clientJar)) {
     files.push({ artifact: version.downloads.client, dest: clientJar });
   }
+  // The game classes live in the client jar, so it has to lead the classpath.
+  classpathEntries.push(clientJar);
 
   for (const library of version.libraries ?? []) {
     if (!rulesAllow(library.rules)) continue;
 
+    // Old metadata names the platform jar through a `natives` map; those jars
+    // are extracted to disk and are not part of the classpath.
     const nativeClassifier = library.natives?.[osKey()];
     if (nativeClassifier) {
       const key = nativeClassifier.replace('${arch}', process.arch === 'ia32' ? '32' : '64');
@@ -128,20 +157,12 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
         natives.push({ artifact, dest });
         if (needsDownload(dest)) files.push({ artifact, dest });
       }
-      // Pre-1.9 libraries can ship a classpath jar next to their natives, so
-      // fall through instead of skipping them.
     }
 
-    if (library.name.includes(':natives-')) {
-      const artifact = library.downloads?.artifact;
-      if (artifact && !nativeClassifier) {
-        const dest = join(librariesDir, artifact.path);
-        natives.push({ artifact, dest });
-        if (needsDownload(dest)) files.push({ artifact, dest });
-      }
-      continue;
-    }
-
+    // Modern metadata ships natives as ordinary `:natives-windows` artifacts.
+    // They belong on the classpath so LWJGL can unpack them itself, and older
+    // versions can also have a classpath jar beside their natives, so this
+    // falls through instead of skipping them.
     const artifact = library.downloads?.artifact ?? (library.downloads ? null : mavenArtifact(library.name));
     if (!artifact) continue;
     const dest = join(librariesDir, artifact.path);
@@ -160,10 +181,16 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
 
   await fs.rm(nativesDir, { recursive: true, force: true });
   await fs.mkdir(nativesDir, { recursive: true });
+  // Modern versions point java.library.path and the LWJGL/JNA extraction paths
+  // at subdirectories of the natives dir; the JVM does not create them for us.
+  for (const sub of ['java', 'jna', 'lwjgl', 'netty']) {
+    await fs.mkdir(join(nativesDir, sub), { recursive: true });
+  }
   for (const native of natives) {
     if (!existsSync(native.dest)) continue;
     try {
       extractNatives(native.dest, nativesDir);
+      extractNatives(native.dest, join(nativesDir, 'java'));
     } catch {
       // A corrupt native jar is not fatal for every platform; skip it.
     }
