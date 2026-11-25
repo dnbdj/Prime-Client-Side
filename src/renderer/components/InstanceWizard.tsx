@@ -214,6 +214,11 @@ export function InstanceWizard({
                     }}
                   >
                     <span className={`loader-mark ${option.id}`} aria-hidden="true" />
+                    {loader === option.id ? (
+                      <span className="setup-tick" aria-hidden="true">
+                        ✓
+                      </span>
+                    ) : null}
                     <span className="setup-card-head">
                       <span className="setup-card-title">{option.label}</span>
                       {unavailable ? <span className="chip soon">Not yet</span> : null}

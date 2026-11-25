@@ -1369,6 +1369,9 @@ input[type='range']::-webkit-slider-thumb {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Keep the scrollbar gutter reserved: otherwise a longer note adds a
+     scrollbar, narrows the grid and re-flows every card mid-interaction. */
+  scrollbar-gutter: stable;
   padding: 18px 22px 20px;
 }
 
@@ -1386,6 +1389,7 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .setup-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1397,18 +1401,39 @@ input[type='range']::-webkit-slider-thumb {
   background: var(--surface-2);
   color: var(--text);
   text-align: left;
-  transition: border-color 0.12s, background 0.12s, transform 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
 }
 
+/* Hover is just a thin outer line: no movement, so wrapped text cannot shift. */
 .setup-card:hover {
   border-color: var(--line-strong);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.setup-tick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #08110b;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .setup-card.on {
   border-color: rgba(27, 217, 106, 0.55);
   background: var(--green-soft);
   box-shadow: 0 0 0 1px rgba(27, 217, 106, 0.28);
+}
+
+.setup-card.on:hover {
+  box-shadow: 0 0 0 1px rgba(27, 217, 106, 0.55);
 }
 
 .setup-card.static {
@@ -1464,7 +1489,7 @@ input[type='range']::-webkit-slider-thumb {
 
 .setup-card:disabled:hover {
   border-color: var(--line);
-  transform: none;
+  box-shadow: none;
 }
 
 .setup-card.on .setup-card-title {
