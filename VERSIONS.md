@@ -1,6 +1,32 @@
 # Versions
 
-This project has no package version bumps: `package.json` has read `0.1.0` since
+## Version numbers and GitHub releases
+
+Releases use whole numbers for majors and decimals for minors:
+
+- first major release: **1**
+- each minor change after it: **1.1**, **1.2**, …
+- next major change: **2**, then **2.1**, …
+
+`package.json` carries the semver equivalent (`1.0.0`, `1.1.0`, `2.0.0`) because npm
+requires three parts; the tag and GitHub release drop the trailing `.0`.
+
+Cut a release with one command; it bumps `package.json` and the lockfile,
+commits, tags `v<version>`, pushes `main` and the tag, and opens the GitHub
+release with notes taken from commits since the previous version tag:
+
+```sh
+npm run release:minor   # 1.0 -> 1.1
+npm run release:major   # 1.1 -> 2
+```
+
+Major numbers are reserved for breaking or era-changing work. Everything else
+that ships is a decimal bump. The `milestone-NN` tags below are the raw commit
+history from before numbered releases existed; they stay in place for archaeology.
+
+## Pre-versioning snapshots
+
+This project originally had no package version bumps: `package.json` has read `0.1.0` since
 the first commit, and there are no changelog or release files in the history.
 To make each earlier build checkable on GitHub, every commit is tagged in
 chronological order as `milestone-01` … `milestone-18`.

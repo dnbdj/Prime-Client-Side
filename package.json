@@ -12,7 +12,9 @@
     "build:node": "tsc -p tsconfig.node.json",
     "build:renderer": "vite build",
     "start": "npm run build && electron .",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "release:minor": "node tools/release.mjs --minor",
+    "release:major": "node tools/release.mjs --major"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
