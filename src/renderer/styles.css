@@ -1290,8 +1290,9 @@ input[type='range']::-webkit-slider-thumb {
 
 .mm-col-root {
   min-width: 0;
-  align-self: center;
-  padding-top: 21px;
+  align-self: flex-start;
+  /* Sits level with the first family so its branches fan downward only. */
+  padding-top: 18px;
 }
 
 .mm-col-title {
