@@ -2385,3 +2385,73 @@ input[type='range']::-webkit-slider-thumb {
 .success-text {
   color: var(--green);
 }
+
+/* Mods picked on the setup "Content" step, before the instance exists. */
+.setup-mods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.setup-mods-card {
+  width: 100%;
+  min-height: 0;
+}
+
+.setup-mod-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.setup-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+  font-size: 11.5px;
+}
+
+.setup-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-file button {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.setup-file button:hover {
+  color: var(--text);
+}
+
+.setup-mods-empty {
+  margin: 2px 0 0;
+}
+
+.setup-grid-later {
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+}

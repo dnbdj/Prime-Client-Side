@@ -18,7 +18,7 @@ type Props = {
   percent: number;
   onReloadVersions: () => Promise<void> | void;
   onCancel: () => void;
-  onCreate: (entry: InstanceEntry) => void;
+  onCreate: (entry: InstanceEntry, modPaths?: string[]) => void;
 };
 
 /** Every loader the app knows about. Vanilla, Fabric, Forge and Quilt can be set
@@ -52,7 +52,6 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
 ];
 
 const LATER = [
-  { id: 'mods', label: 'Mods', blurb: 'Loader-compatible mods from your own files.' },
   { id: 'shaders', label: 'Shaders', blurb: 'Iris or OptiFine shader packs.' },
   { id: 'resourcepacks', label: 'Resource packs', blurb: 'Textures and sounds for this instance.' },
 ];
@@ -70,7 +69,7 @@ const COPY = [
   },
   {
     title: 'Mods, shaders and resource packs',
-    sub: 'All three can be added later - setup only creates the instance.',
+    sub: 'Add your own mod jars now - they are copied into the instance when it is created. Shaders and resource packs can follow later.',
   },
   {
     title: 'Name and colour',
@@ -113,6 +112,8 @@ export function InstanceWizard({
   const [btaLoading, setBtaLoading] = useState(false);
   // A Java Agent install has no published artifact, so the jar is picked here.
   const [agentJar, setAgentJar] = useState('');
+  // Mod jars chosen here are copied into the instance once its record exists.
+  const [modFiles, setModFiles] = useState<string[]>([]);
 
   // BTA ships its own builds, so its list comes from BTA rather than Mojang's
   // manifest. It is fetched once, the first time the tile is picked.
@@ -171,6 +172,19 @@ export function InstanceWizard({
         ? instanceName.length > 0
         : true);
 
+  const pickModFiles = async () => {
+    const picked = await window.prime.pickMods();
+    if (picked.length === 0) return;
+    setModFiles((current) => [...current, ...picked.filter((file) => !current.includes(file))]);
+    setContent((current) => ({ ...current, mods: true }));
+  };
+
+  const removeModFile = (file: string) => {
+    const next = modFiles.filter((candidate) => candidate !== file);
+    setModFiles(next);
+    if (next.length === 0) setContent({ ...content, mods: false });
+  };
+
   // The working loaders are real installs, not labels: run the same installer
   // the detail panel uses and only create the instance once a profile exists.
   const finish = async () => {
@@ -196,11 +210,12 @@ export function InstanceWizard({
       await onReloadVersions();
       onCreate(
         defaultInstance(result.versionId, { loader, name: instanceName, color, content }),
+        modFiles,
       );
       return;
     }
 
-    onCreate(defaultInstance(pending, { loader, name: instanceName, color, content }));
+    onCreate(defaultInstance(pending, { loader, name: instanceName, color, content }), modFiles);
   };
 
   const advance = () => {
@@ -365,18 +380,67 @@ export function InstanceWizard({
 
         {step === 2 ? (
           <>
-            <div className="setup-grid">
-              {LATER.map((item) => (
-                <div className="setup-card static" key={item.id}>
-                  <span className="chip subtle">Add later</span>
-                  <span className="setup-card-title">{item.label}</span>
-                  <span className="setup-card-blurb">{item.blurb}</span>
+            <div className="setup-mods">
+              <div className="setup-card setup-mods-card">
+                <span className="setup-card-head">
+                  <span className="setup-card-title">Mods</span>
+                  <span className="chip subtle">
+                    {modFiles.length === 0
+                      ? 'Optional'
+                      : `${modFiles.length} file${modFiles.length === 1 ? '' : 's'}`}
+                  </span>
+                </span>
+                <span className="setup-card-blurb">
+                  Jar files from your disk. They are copied into this instance's mods folder as
+                  soon as it is created.
+                </span>
+                <div className="setup-mod-actions">
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={installing}
+                    onClick={() => void pickModFiles()}
+                  >
+                    Add mod jars…
+                  </button>
                 </div>
-              ))}
+                {modFiles.length > 0 ? (
+                  <ul className="setup-file-list">
+                    {modFiles.map((file) => {
+                      const label = file.split(/[\\/]/).pop() ?? file;
+                      return (
+                        <li className="setup-file" key={file}>
+                          <span title={file}>{label}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${label}`}
+                            onClick={() => removeModFile(file)}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="note setup-mods-empty">
+                    No mod files picked yet - you can also add them after the instance exists.
+                  </p>
+                )}
+              </div>
+              <div className="setup-grid setup-grid-later">
+                {LATER.map((item) => (
+                  <div className="setup-card static" key={item.id}>
+                    <span className="chip subtle">Add later</span>
+                    <span className="setup-card-title">{item.label}</span>
+                    <span className="setup-card-blurb">{item.blurb}</span>
+                  </div>
+                ))}
+              </div>
             </div>
             <p className="note setup-note">
-              Nothing is installed here: this step only says what the instance is for. Mods, shaders
-              and resource packs can be added once the instance exists.
+              Picked mods are copied in when the instance is created. Shaders and resource packs
+              can be added afterwards from the instance page.
             </p>
           </>
         ) : null}

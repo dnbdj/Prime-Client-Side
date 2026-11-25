@@ -20,7 +20,7 @@ type Props = {
   runningId: string | null;
   loadingVersions: boolean;
   filter: string;
-  onAddInstance: (entry: InstanceEntry) => void;
+  onAddInstance: (entry: InstanceEntry, modPaths?: string[]) => void;
   onOpenInstance: (entry: InstanceEntry) => void;
   onPlay: (entry: InstanceEntry) => void;
   onDelete: (entry: InstanceEntry) => void;
@@ -94,8 +94,8 @@ export function InstancesView({
         percent={percent}
         onReloadVersions={onReloadVersions}
         onCancel={() => setCreating(false)}
-        onCreate={(entry) => {
-          onAddInstance(entry);
+        onCreate={(entry, modPaths) => {
+          onAddInstance(entry, modPaths);
           setCreating(false);
         }}
       />

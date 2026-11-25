@@ -219,6 +219,8 @@ export type PrimeApi = {
   ): Promise<LoaderInstallResult>;
   /** File picker for a JVM agent jar. */
   pickAgent(): Promise<string | null>;
+  /** File picker for mod jars chosen while an instance is being set up. */
+  pickMods(): Promise<string[]>;
   kill(): Promise<boolean>;
   instanceDir(instanceId: string, versionId: string): Promise<string>;
   listMods(instanceId: string, versionId: string): Promise<ModFile[]>;

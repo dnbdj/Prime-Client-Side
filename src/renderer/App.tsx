@@ -266,7 +266,7 @@ export function App() {
   }, [config?.instances, config?.recent, config?.versionId, versions]);
 
   const addInstance = useCallback(
-    async (entry: InstanceEntry) => {
+    async (entry: InstanceEntry, modPaths: string[] = []) => {
       const current = config?.instances ?? [];
       const existing = current.find(
         (candidate) =>
@@ -287,6 +287,14 @@ export function App() {
         ),
       ];
       await patchConfig({ instances: next, versionId: entry.versionId });
+      // Mods picked during setup land in the folder the record just claimed.
+      if (modPaths.length > 0) {
+        try {
+          await window.prime.addModsFrom(record.id, record.versionId, modPaths);
+        } catch (err) {
+          setError(describeError(err));
+        }
+      }
     },
     [config?.instances, patchConfig],
   );
@@ -585,7 +593,7 @@ export function App() {
               runningId={runningId}
               loadingVersions={loadingVersions}
               filter={filter}
-              onAddInstance={(entry) => void addInstance(entry)}
+              onAddInstance={(entry, modPaths) => void addInstance(entry, modPaths)}
               onOpenInstance={(entry) => {
                 setInstanceId(entry.id);
                 setView('instance');

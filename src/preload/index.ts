@@ -44,6 +44,7 @@ const api: PrimeApi = {
       agentJar,
     ) as Promise<LoaderInstallResult>,
   pickAgent: () => ipcRenderer.invoke('prime:agent:pick') as Promise<string | null>,
+  pickMods: () => ipcRenderer.invoke('prime:mods:pick') as Promise<string[]>,
   kill: () => ipcRenderer.invoke('prime:kill') as Promise<boolean>,
   instanceDir: (instanceId, versionId) =>
     ipcRenderer.invoke('prime:instance:dir', instanceId, versionId) as Promise<string>,

@@ -359,6 +359,21 @@ ipcMain.handle(
   },
 );
 
+// Instance setup picks mod jars before the instance exists, so this returns the
+// paths and lets the caller copy them once the record has been saved.
+ipcMain.handle('prime:mods:pick', async (): Promise<string[]> => {
+  const options: OpenDialogOptions = {
+    title: 'Add mods to this instance',
+    buttonLabel: 'Pick mods',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Mod jars', extensions: ['jar', 'zip'] }],
+  };
+  const picked = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  return picked.canceled ? [] : picked.filePaths;
+});
+
 // Explicit-path entry point: the same copy the dialog performs, without the
 // native picker, so the add path is testable.
 ipcMain.handle(
