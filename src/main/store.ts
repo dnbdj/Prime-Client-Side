@@ -20,6 +20,7 @@ const DEFAULTS: PrimeConfig = {
   javaPath: null,
   gameDir: null,
   versionId: null,
+  recent: [],
 };
 
 function configPath(): string {

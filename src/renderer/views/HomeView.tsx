@@ -1,10 +1,12 @@
 import type { RefObject } from 'react';
 import type { PrimeConfig, ProgressEvent, VersionSummary } from '../../shared/api';
-import { shortDate } from '../format';
+import { shortDate, timeAgo } from '../format';
+
+type RecentCard = { version: VersionSummary; playedAt: string };
 
 type Props = {
   config: PrimeConfig | null;
-  versions: VersionSummary[];
+  recent: RecentCard[];
   selected: VersionSummary | null;
   progress: ProgressEvent | null;
   percent: number;
@@ -21,7 +23,7 @@ type Props = {
 
 export function HomeView({
   config,
-  versions,
+  recent,
   selected,
   progress,
   percent,
@@ -35,7 +37,6 @@ export function HomeView({
   onLaunch,
   onStop,
 }: Props) {
-  const releases = versions.filter((version) => version.type === 'release').slice(0, 5);
 
   return (
     <div className="home">
@@ -110,27 +111,32 @@ export function HomeView({
 
       <section className="section">
         <div className="section-head">
-          <h2>Latest releases</h2>
+          <h2>Recently played</h2>
           <button type="button" className="link" onClick={onBrowseAll}>
-            Browse all
+            All instances
           </button>
         </div>
         <div className="card-grid">
-          {releases.length === 0 ? (
-            <p className="empty">Version list unavailable. Check your connection in Versions.</p>
+          {recent.length === 0 ? (
+            <p className="empty">
+              No instances played yet. Pick a version in Versions and press Play - it shows up here.
+            </p>
           ) : (
-            releases.map((version) => (
+            recent.map(({ version, playedAt }) => (
               <button
                 type="button"
                 key={version.id}
                 className={version.id === config?.versionId ? 'vcard selected' : 'vcard'}
                 onClick={() => onSelectVersion(version.id)}
               >
-                <span className={`vcard-banner ${version.type}`} aria-hidden="true" />
+                <span
+                  className={`vcard-banner ${version.loader ?? version.type}`}
+                  aria-hidden="true"
+                />
                 <span className="vcard-body">
-                  <span className="chip subtle">{version.type}</span>
+                  <span className="chip subtle">{version.loader ?? version.type}</span>
                   <strong className="vcard-id">{version.id}</strong>
-                  <span className="vcard-date">{shortDate(version.releaseTime)}</span>
+                  <span className="vcard-date">played {timeAgo(playedAt)}</span>
                 </span>
               </button>
             ))

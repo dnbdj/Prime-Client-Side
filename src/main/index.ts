@@ -201,7 +201,11 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     writeLog(`[prime] Launcher instance ${process.pid}`);
     writeLog(`[prime] Session log: ${logPath}`);
     writeLog(`[prime] JVM flags: ${jvmArgs.trim() || '(none)'}${override ? ' (version override)' : ' (global)'}`);
-    saveConfig({ versionId });
+    const recent = [
+      { versionId, playedAt: new Date().toISOString() },
+      ...(config.recent ?? []).filter((entry) => entry.versionId !== versionId),
+    ].slice(0, 6);
+    saveConfig({ versionId, recent });
 
     if (config.closeOnLaunch) {
       // Forget the handle first: before-quit only kills a session it still owns,

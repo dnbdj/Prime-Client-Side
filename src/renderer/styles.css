@@ -793,6 +793,14 @@ input::placeholder {
   background-color: rgba(101, 64, 76, 0.55);
 }
 
+.vcard-banner.fabric {
+  background-color: rgba(27, 217, 106, 0.18);
+}
+
+.vcard-banner.forge {
+  background-color: rgba(219, 146, 41, 0.22);
+}
+
 .vcard-body {
   display: flex;
   flex-direction: column;

@@ -155,6 +155,11 @@ export function App() {
       return;
     }
     setRunning(true);
+    // The main process records the launch for the Recently played list.
+    await window.prime
+      .getConfig()
+      .then(setConfig)
+      .catch(() => undefined);
   }, [busy, config?.versionId, running]);
 
   const handleStop = useCallback(async () => {
@@ -187,6 +192,16 @@ export function App() {
     () => versions.find((version) => version.id === config?.versionId) ?? null,
     [config?.versionId, versions],
   );
+
+  const recentInstances = useMemo(() => {
+    return (config?.recent ?? [])
+      .map((entry) => {
+        const version = versions.find((candidate) => candidate.id === entry.versionId);
+        return version ? { version, playedAt: entry.playedAt } : null;
+      })
+      .filter((entry): entry is { version: VersionSummary; playedAt: string } => entry !== null)
+      .slice(0, 5);
+  }, [config?.recent, versions]);
 
   const displayName = account?.name ?? (config?.username || 'No account');
 
@@ -269,7 +284,7 @@ export function App() {
           {view === 'home' ? (
             <HomeView
               config={config}
-              versions={versions}
+              recent={recentInstances}
               selected={selected}
               progress={progress}
               percent={percent}

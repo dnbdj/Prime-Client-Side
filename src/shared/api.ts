@@ -32,6 +32,13 @@ export type PrimeConfig = {
   gameDir: string | null;
   /** Last selected version id. */
   versionId: string | null;
+  /** Instances that were actually played, newest first. */
+  recent: RecentInstance[];
+};
+
+export type RecentInstance = {
+  versionId: string;
+  playedAt: string;
 };
 
 export type ProgressEvent = {
