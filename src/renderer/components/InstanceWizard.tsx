@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   InstanceContent,
   InstanceEntry,
@@ -30,7 +30,7 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'forge', label: 'Forge', blurb: 'The classic loader for big modpacks.' },
   { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.' },
   { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for beta 1.7.3.' },
-  { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
+  { id: 'bta', label: 'BTA', blurb: 'Better Than Adventure, the beta 1.7.3 overhaul.' },
   { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
   { id: 'legacyfabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.' },
   { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for 1.12.2 and older versions.' },
@@ -63,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, Ornithe and NilLoader work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe and NilLoader work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -110,15 +110,41 @@ export function InstanceWizard({
     { status: 'idle' } | { status: 'installing' } | { status: 'error'; error: string }
   >({ status: 'idle' });
   const installing = install.status === 'installing';
+  const [btaVersions, setBtaVersions] = useState<VersionSummary[]>([]);
+  const [btaLoading, setBtaLoading] = useState(false);
+
+  // BTA ships its own builds, so its list comes from BTA rather than Mojang's
+  // manifest. It is fetched once, the first time the tile is picked.
+  useEffect(() => {
+    if (loader !== 'bta' || btaVersions.length > 0) return;
+    let live = true;
+    setBtaLoading(true);
+    window.prime
+      .btaVersions()
+      .then((list) => {
+        if (live) setBtaVersions(list);
+      })
+      .catch(() => {
+        if (live) setBtaVersions([]);
+      })
+      .finally(() => {
+        if (live) setBtaLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [loader, btaVersions.length]);
 
   const options = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    return versions.filter((version) => {
-      if (version.loader) return false;
-      if (channel === 'release' && version.type !== 'release') return false;
+    // BTA numbers its own builds (bta-v8.0.1) and is in no Minecraft manifest.
+    const source = loader === 'bta' ? btaVersions : versions;
+    return source.filter((version) => {
+      if (loader !== 'bta' && version.loader) return false;
+      if (loader !== 'bta' && channel === 'release' && version.type !== 'release') return false;
       return needle.length === 0 || version.id.toLowerCase().includes(needle);
     });
-  }, [channel, filter, versions]);
+  }, [btaVersions, channel, filter, loader, versions]);
 
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
@@ -131,7 +157,8 @@ export function InstanceWizard({
     loader === 'liteloader' ||
     loader === 'babric' ||
     loader === 'ornithe' ||
-    loader === 'nilloader';
+    loader === 'nilloader' ||
+    loader === 'bta';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
@@ -187,7 +214,11 @@ export function InstanceWizard({
             New instance · step {step + 1} of {STEPS.length}
           </span>
           <h2 className="setup-title">{COPY[step].title}</h2>
-          <p className="setup-sub">{COPY[step].sub}</p>
+          <p className="setup-sub">
+            {step === 1 && loader === 'bta'
+              ? 'BTA ships its own builds - pick the release you want to play.'
+              : COPY[step].sub}
+          </p>
         </div>
         <div className="setup-head-side">
           <div className="setup-picks">
@@ -245,7 +276,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, Ornithe and NilLoader are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe and NilLoader are the working choices today.'}
             </p>
           </>
         ) : null}
@@ -282,11 +313,15 @@ export function InstanceWizard({
               activeId={null}
               onPick={setPending}
               empty={
-                loadingVersions
-                  ? 'Loading version manifest…'
-                  : versions.length === 0
-                    ? 'Version manifest unavailable. Check your connection and reload.'
-                    : 'No versions match that filter.'
+                loader === 'bta'
+                  ? btaLoading
+                    ? 'Loading BTA builds…'
+                    : 'BTA builds unavailable. Check your connection and reload.'
+                  : loadingVersions
+                    ? 'Loading version manifest…'
+                    : versions.length === 0
+                      ? 'Version manifest unavailable. Check your connection and reload.'
+                      : 'No versions match that filter.'
               }
             />
           </div>

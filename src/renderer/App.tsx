@@ -198,7 +198,8 @@ export function App() {
         | 'liteloader'
         | 'babric'
         | 'ornithe'
-        | 'nilloader',
+        | 'nilloader'
+        | 'bta',
       gameVersion?: string,
     ) => {
       const target = gameVersion ?? config?.versionId;

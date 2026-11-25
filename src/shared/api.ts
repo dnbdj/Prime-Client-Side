@@ -15,7 +15,8 @@ export type LoaderKind =
   | 'liteloader'
   | 'babric'
   | 'ornithe'
-  | 'nilloader';
+  | 'nilloader'
+  | 'bta';
 
 /** How an instance was started: the plain game, a mod loader, or a modpack. */
 export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';
@@ -202,6 +203,8 @@ export type PrimeApi = {
   getConfig(): Promise<PrimeConfig>;
   setConfig(patch: Partial<PrimeConfig>): Promise<PrimeConfig>;
   listVersions(): Promise<VersionSummary[]>;
+  /** BTA's own build list; these ids are never in the Minecraft manifest. */
+  btaVersions(): Promise<VersionSummary[]>;
   listJava(): Promise<JavaCandidate[]>;
   checkJava(path: string): Promise<JavaCheckResult>;
   launch(versionId: string, instanceId?: string): Promise<LaunchResult>;

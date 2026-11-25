@@ -14,8 +14,12 @@ type MapNode = {
 
 const PLAIN = /^\d+(\.\d+)*$/;
 
+/** BTA ids carry a bta- prefix so they cannot collide with Minecraft versions. */
+const displayLabel = (id: string): string => (id.startsWith('bta-') ? `BTA ${id.slice(4)}` : id);
+
 /** 26.3 -> 26, 1.21.4 -> 1.21, snapshots -> Snapshots. */
 function familyOf(id: string): string {
+  if (id.startsWith('bta-')) return 'BTA';
   if (!PLAIN.test(id)) return 'Snapshots';
   const parts = id.split('.');
   return parts[0] === '1' && parts.length > 1 ? `1.${parts[1]}` : parts[0];
@@ -201,7 +205,7 @@ export function VersionMindMap({
                 onPick(null);
               }}
             >
-              <span className="mm-label">{node.id}</span>
+              <span className="mm-label">{displayLabel(node.id)}</span>
               {isLeaf ? null : <span className="mm-count">{node.count}</span>}
               {isLeaf ? null : (
                 <span className="mm-caret" aria-hidden="true">
@@ -241,7 +245,7 @@ export function VersionMindMap({
                   onPick(null);
                 }}
               >
-                <span className="mm-label">{node.id}</span>
+                <span className="mm-label">{displayLabel(node.id)}</span>
                 {isLeaf ? null : <span className="mm-count">{node.count}</span>}
                 {isLeaf ? null : (
                   <span className="mm-caret" aria-hidden="true">
@@ -266,7 +270,7 @@ export function VersionMindMap({
               className={leafClass(id)}
               onClick={() => onPick(id)}
             >
-              <span className="mm-label">{id}</span>
+              <span className="mm-label">{displayLabel(id)}</span>
               <span className="mm-tag">base</span>
             </button>
           ))}
@@ -281,7 +285,7 @@ export function VersionMindMap({
                 className={leafClass(target)}
                 onClick={() => onPick(target)}
               >
-                <span className="mm-label">{node.id}</span>
+                <span className="mm-label">{displayLabel(node.id)}</span>
                 {node.children.length > 0 ? (
                   <span className="mm-tag">{node.count}</span>
                 ) : null}

@@ -2,10 +2,10 @@ import { existsSync, promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
-import type { ProgressEvent } from '../shared/api';
+import type { ProgressEvent, VersionSummary } from '../shared/api';
 import { downloadFile, fetchJson } from './net';
 import { discoverJava } from './java';
-import { prepare, resolveVersion, type VersionJson } from './install';
+import { prepare, resolveVersion, type Library, type VersionJson } from './install';
 
 export type LoaderKind =
   | 'fabric'
@@ -16,7 +16,8 @@ export type LoaderKind =
   | 'liteloader'
   | 'babric'
   | 'ornithe'
-  | 'nilloader';
+  | 'nilloader'
+  | 'bta';
 
 export type LoaderInstall = {
   versionId: string;
@@ -70,6 +71,7 @@ const BABRIC_META = 'https://meta.babric.glass-launcher.net/v2/versions';
 const ORNITHE_META = 'https://meta.ornithemc.net/v3/versions';
 const NILLOADER_RELEASES = 'https://git.sleeping.town/api/v1/repos/Nil/NilLoader/releases';
 const NILLOADER_MAVEN = 'https://repo.sleeping.town';
+const BTA_CLIENT = 'https://downloads.betterthanadventure.net/bta-client/release';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -879,6 +881,137 @@ export async function installNilLoader(
   return { versionId, kind: 'nilloader', gameVersion, loaderVersion: version };
 }
 
+type BtaVersions = { versions: Record<string, { release?: string }> };
+
+type BtaPatch = {
+  mainClass?: string;
+  minecraftArguments?: string;
+  compatibleJavaMajors?: number[];
+  compatibleJavaName?: string;
+  libraries?: Library[];
+};
+
+/** The MultiMC patches BTA's own installer writes, read from its instance zip. */
+function readBtaPatch(zip: AdmZip, name: string): BtaPatch {
+  const entry = zip.getEntry(`patches/${name}.json`);
+  if (!entry) throw new Error(`missing patches/${name}.json`);
+  return JSON.parse(entry.getData().toString('utf8')) as BtaPatch;
+}
+
+/**
+ * BTA is its own game: it numbers builds v8.0.1 and up and publishes a build
+ * index beside the client jars, so its versions come from there, not Mojang.
+ */
+export async function listBtaVersions(): Promise<VersionSummary[]> {
+  const body = await fetchJson<BtaVersions>(`${BTA_CLIENT}/versions-new.json`);
+  return Object.entries(body.versions ?? {})
+    .map(([version, info]) => {
+      const released = info.release ? Date.parse(`${info.release.replace(' ', 'T')}Z`) : Number.NaN;
+      return {
+        id: `bta-${version}`,
+        type: 'release',
+        releaseTime: Number.isFinite(released)
+          ? new Date(released).toISOString()
+          : new Date(0).toISOString(),
+      };
+    })
+    .sort((a, b) => b.releaseTime.localeCompare(a.releaseTime));
+}
+
+/**
+ * BTA publishes a complete vanilla-launcher profile for every build
+ * (manifest.json beside the client jar), with its own main class, libraries and
+ * LWJGL. The install adopts that profile and lets the normal prepare step fetch
+ * the client jar, libraries and pre-1.6 assets.
+ */
+export async function installBta(
+  btaVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  const version = btaVersion.startsWith('bta-') ? btaVersion.slice(4) : btaVersion;
+  const versionId = `bta-${version}`;
+  progress({ phase: 'loader', current: 0, total: 4, label: `Looking up BTA ${version}` });
+  const builds = await listBtaVersions().catch(() => [] as VersionSummary[]);
+  if (builds.length > 0 && !builds.some((entry) => entry.id === versionId)) {
+    throw new Error(`BTA does not publish a build called ${version}.`);
+  }
+
+  progress({ phase: 'loader', current: 1, total: 4, label: `Fetching BTA ${version} files` });
+  const manifest = await fetchJson<VersionJson>(
+    `${BTA_CLIENT}/${encodeURIComponent(version)}/manifest.json`,
+  );
+  if (!manifest.downloads?.client) {
+    throw new Error(`BTA ${version} published no client jar.`);
+  }
+
+  // The manifest beside the jar still names launchwrapper 1.5, which cannot run
+  // on the Java 17 these classes need (it casts the system loader to
+  // URLClassLoader). BTA's instance archive carries the patches its own
+  // installer writes - main class, launch arguments, library set, Java - so
+  // those are what the profile is built from.
+  const archive = join(rootDir, '.prime-cache', `bta-${version}-instance.zip`);
+  await fs.mkdir(join(rootDir, '.prime-cache'), { recursive: true });
+  progress({ phase: 'loader', current: 2, total: 4, label: `Downloading BTA ${version} instance` });
+  if (!existsSync(archive)) {
+    await downloadFile(`${BTA_CLIENT}/${encodeURIComponent(version)}/instance.zip`, archive);
+  }
+
+  let game: BtaPatch;
+  let graphics: BtaPatch;
+  try {
+    const zip = new AdmZip(archive);
+    game = readBtaPatch(zip, 'net.minecraft');
+    graphics = readBtaPatch(zip, 'org.lwjgl');
+  } catch (error) {
+    throw new Error(
+      `BTA's instance archive could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (!game.minecraftArguments) throw new Error(`BTA ${version} does not name its launch arguments.`);
+
+  const libraries = new Map<string, Library>();
+  for (const library of [...(game.libraries ?? []), ...(graphics.libraries ?? [])]) {
+    if (library?.name) libraries.set(library.name, library);
+  }
+  const major = game.compatibleJavaMajors?.[0] ?? 17;
+
+  const profile: VersionJson = {
+    id: versionId,
+    type: 'old_beta',
+    mainClass: game.mainClass ?? 'net.minecraft.client.Minecraft',
+    minecraftArguments: game.minecraftArguments,
+    libraries: [...libraries.values()],
+    downloads: { client: manifest.downloads.client },
+    javaVersion: {
+      component: game.compatibleJavaName ?? 'java-runtime-gamma',
+      majorVersion: major,
+    },
+    releaseTime: manifest.releaseTime ?? new Date().toISOString(),
+  };
+  profile.primeLoader = 'bta';
+  log(
+    `[prime] BTA profile ${versionId}: main ${profile.mainClass}, ${libraries.size} libraries, Java ${major}`,
+  );
+
+  await writeProfile(rootDir, profile);
+  try {
+    // BTA's own client jar, its LWJGL build and the pre-1.6 asset index.
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 4, total: 4, label: 'BTA installed' });
+  return { versionId, kind: 'bta', gameVersion: 'b1.7.3', loaderVersion: version };
+}
+
 export async function installLoader(
   kind: LoaderKind,
   gameVersion: string,
@@ -886,6 +1019,8 @@ export async function installLoader(
   progress: Progress,
   log: Log,
 ): Promise<LoaderInstall> {
+  // BTA numbers its own builds, so there is no Mojang version to resolve first.
+  if (kind === 'bta') return installBta(gameVersion, rootDir, progress, log);
   const resolved = await pickGameVersion(gameVersion, rootDir);
   if (kind === 'fabric') return installFabric(resolved, rootDir, progress, log);
   if (kind === 'forge') return installForge(resolved, rootDir, progress, log);

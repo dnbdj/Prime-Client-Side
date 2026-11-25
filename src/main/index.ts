@@ -33,7 +33,7 @@ import {
 } from './auth';
 import { discoverJava, verifyJava } from './java';
 import { listVersions } from './install';
-import { installLoader, type LoaderKind } from './loaders';
+import { installLoader, listBtaVersions, type LoaderKind } from './loaders';
 import { launch, type LaunchHandle } from './launch';
 import { defaultInstance } from '../shared/instances';
 import { backfillInstanceRecords, loadConfig, saveConfig } from './store';
@@ -114,6 +114,9 @@ ipcMain.handle('prime:config:set', (_event, patch: Partial<PrimeConfig>) => save
 
 ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 
+/** BTA lists its own builds; they never appear in Mojang's manifest. */
+ipcMain.handle('prime:bta:versions', async () => listBtaVersions());
+
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
@@ -127,6 +130,7 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
     'babric',
     'ornithe',
     'nilloader',
+    'bta',
   ];
   if (!kinds.includes(kind)) return { ok: false, error: 'Unknown loader.' };
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
@@ -238,6 +242,8 @@ function gameVersionOf(versionId: string): string {
   // LiteLoader ids look like 1.12.2-LiteLoader1.12.2.
   const liteloader = /^(\d+\.\d+(?:\.\d+)?)-LiteLoader/.exec(versionId);
   if (liteloader) return liteloader[1];
+  // BTA builds are beta 1.7.3 with their own classes and a launchwrapper main.
+  if (versionId.startsWith('bta-')) return 'b1.7.3';
   return versionId;
 }
 

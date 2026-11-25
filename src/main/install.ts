@@ -51,7 +51,8 @@ export type VersionJson = {
     | 'liteloader'
     | 'babric'
     | 'ornithe'
-    | 'nilloader';
+    | 'nilloader'
+    | 'bta';
 };
 
 type Manifest = {
@@ -144,6 +145,21 @@ function mavenArtifact(name: string, baseUrl = LIBRARIES_URL): Artifact | null {
     classifier ? `-${classifier}` : ''
   }.jar`;
   return { path, sha1: '', size: 0, url: `${baseUrl.replace(/\/$/, '')}/${path}` };
+}
+
+/**
+ * Loader metadata (BTA's MultiMC patches, for example) can name an artifact by
+ * URL without a maven `path`; the URL already is one, so it is used as the
+ * on-disk path instead of failing on a missing field.
+ */
+function withArtifactPath(artifact: Artifact): Artifact {
+  if (artifact.path) return artifact;
+  try {
+    const derived = decodeURIComponent(new URL(artifact.url).pathname.replace(/^\/+/, ''));
+    return derived ? { ...artifact, path: derived } : artifact;
+  } catch {
+    return artifact;
+  }
 }
 
 function extractNatives(jarPath: string, outDir: string): void {
@@ -277,9 +293,10 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
       // Metadata with `downloads` names the classifier jars outright. Loader
       // profiles that only give a maven repo have natives jars named
       // <artifact>-<version>-<classifier>.jar and no plain jar at all.
-      const artifact =
+      const published =
         library.downloads?.classifiers?.[key] ??
         (library.downloads ? null : mavenArtifact(`${library.name}:${key}`, library.url));
+      const artifact = published ? withArtifactPath(published) : null;
       if (artifact) {
         const dest = join(librariesDir, artifact.path);
         natives.push({ artifact, dest });
@@ -294,9 +311,10 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
     // They belong on the classpath so LWJGL can unpack them itself, and older
     // versions can also have a classpath jar beside their natives, so this
     // falls through instead of skipping them.
-    const artifact =
+    const published =
       library.downloads?.artifact ?? (library.downloads ? null : mavenArtifact(library.name, library.url));
-    if (!artifact) continue;
+    if (!published) continue;
+    const artifact = withArtifactPath(published);
     if (!artifact.sha1 && library.sha1) artifact.sha1 = library.sha1;
     const dest = join(librariesDir, artifact.path);
     classpathEntries.push(dest);

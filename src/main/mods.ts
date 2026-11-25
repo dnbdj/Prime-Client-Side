@@ -234,6 +234,14 @@ export async function searchMods(
   loader: InstanceLoader,
   curseForgeKey: string | null,
 ): Promise<ModSearchResult[]> {
+  // Neither platform carries BTA mods: BTA is its own game and publishes them
+  // itself, so returning beta 1.7.3 results here would only offer jars that
+  // cannot load.
+  if (loader === 'bta') {
+    throw new Error(
+      'BTA mods come from betterthanadventure.net, not Modrinth or CurseForge. Drop them into the mods folder instead.',
+    );
+  }
   if (provider === 'curseforge') {
     if (!curseForgeKey) {
       throw new Error(

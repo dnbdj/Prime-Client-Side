@@ -31,6 +31,7 @@ const api: PrimeApi = {
   getConfig: () => ipcRenderer.invoke('prime:config:get') as Promise<PrimeConfig>,
   setConfig: (patch) => ipcRenderer.invoke('prime:config:set', patch) as Promise<PrimeConfig>,
   listVersions: () => ipcRenderer.invoke('prime:versions') as Promise<VersionSummary[]>,
+  btaVersions: () => ipcRenderer.invoke('prime:bta:versions') as Promise<VersionSummary[]>,
   listJava: () => ipcRenderer.invoke('prime:java:list') as Promise<JavaCandidate[]>,
   checkJava: (path) => ipcRenderer.invoke('prime:java:check', path) as Promise<JavaCheckResult>,
   launch: (versionId, instanceId) =>

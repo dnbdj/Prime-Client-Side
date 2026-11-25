@@ -33,7 +33,8 @@ type Props = {
       | 'liteloader'
       | 'babric'
       | 'ornithe'
-      | 'nilloader',
+      | 'nilloader'
+      | 'bta',
   ) => void;
   onDelete: () => void;
 };
@@ -309,6 +310,14 @@ export function InstanceView({
                     onClick={() => onInstallLoader('babric')}
                   >
                     Install Babric
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('bta')}
+                  >
+                    Install BTA
                   </button>
                   <button
                     type="button"
