@@ -265,7 +265,16 @@ export function SettingsView({
                       Cancel
                     </button>
                   </div>
-                  <p className="note">Waiting for you to approve the code — this updates by itself.</p>
+                  <p className="note">
+                    Waiting for you to approve the code — this updates by itself. Keep Prime open
+                    until it says you are signed in: closing the app cancels the sign-in and the
+                    code is thrown away.
+                  </p>
+                  <p className="note">
+                    Microsoft's page names this sign-in “Prism Launcher”. That is the shared public
+                    registration this launcher authenticates through, not another launcher being
+                    installed, and it never sees your password.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -292,6 +301,11 @@ export function SettingsView({
                   <p className="note">
                     Offline mode covers singleplayer and offline servers. Sign in to join online
                     servers and keep your real skin and name.
+                  </p>
+                  <p className="note">
+                    Microsoft's page names this sign-in “Prism Launcher”. That is the shared public
+                    registration this launcher authenticates through, not another launcher being
+                    installed, and it never sees your password.
                   </p>
                 </>
               )}
