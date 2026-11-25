@@ -25,9 +25,12 @@ if (!mode) {
 }
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const run = (command, commandArgs) => execFileSync(command, commandArgs, { stdio: 'inherit' });
-const capture = (command, commandArgs) =>
-  execFileSync(command, commandArgs, { encoding: 'utf8' }).trim();
+// Windows needs a shell to launch npm.cmd; git and gh are real executables.
+const npmShell = process.platform === 'win32' ? { shell: true } : {};
+const run = (command, commandArgs, options = {}) =>
+  execFileSync(command, commandArgs, { stdio: 'inherit', ...options });
+const capture = (command, commandArgs, options = {}) =>
+  execFileSync(command, commandArgs, { encoding: 'utf8', ...options }).trim();
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const [major, minor] = pkg.version.split('.').map(Number);
@@ -51,7 +54,7 @@ const commits = capture('git', ['log', range, '--format=- %s (%h)']);
 
 console.log(`releasing Prime ${label} (package.json ${nextVersion}, tag ${tag})`);
 
-run(npm, ['version', nextVersion, '--no-git-tag-version', '--allow-same-version']);
+run(npm, ['version', nextVersion, '--no-git-tag-version', '--allow-same-version'], npmShell);
 run('git', ['add', 'package.json', 'package-lock.json']);
 run('git', ['commit', '-m', `Release ${tag}: Prime ${label}`]);
 run('git', ['tag', '-a', tag, '-m', `Prime ${label}`]);
