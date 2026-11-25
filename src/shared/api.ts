@@ -165,6 +165,24 @@ export type SignInPoll = {
   account?: MinecraftAccount;
 };
 
+/** State of the Windows scheduled task that runs the Wi-Fi watcher. */
+export type WatcherStatus = {
+  /** Scheduled tasks only exist on Windows. */
+  supported: boolean;
+  installed: boolean;
+  taskName: string;
+  /** Minutes between checks while the task is registered. */
+  intervalMinutes: number;
+  scriptPath: string;
+  nodePath: string | null;
+  nextRun: string | null;
+  lastRun: string | null;
+  lastResult: string | null;
+  logPath: string;
+  lastLogLine: string | null;
+  error?: string;
+};
+
 export type UpdateStatus =
   | { status: 'unconfigured' }
   | { status: 'current'; version: string }
@@ -214,6 +232,10 @@ export type PrimeApi = {
   signOut(): Promise<void>;
   appVersion(): Promise<string>;
   checkUpdates(): Promise<UpdateStatus>;
+  watcherStatus(): Promise<WatcherStatus>;
+  /** Registers the watcher with the Windows Task Scheduler. */
+  scheduleWatcher(): Promise<WatcherStatus>;
+  unscheduleWatcher(): Promise<WatcherStatus>;
   onProgress(cb: (event: ProgressEvent) => void): () => void;
   onLog(cb: (line: string) => void): () => void;
   onExit(cb: (code: number | null) => void): () => void;

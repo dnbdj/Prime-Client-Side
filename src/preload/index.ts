@@ -16,6 +16,7 @@ import type {
   SignInPoll,
   UpdateStatus,
   VersionSummary,
+  WatcherStatus,
 } from '../shared/api';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -67,6 +68,9 @@ const api: PrimeApi = {
   signOut: () => ipcRenderer.invoke('prime:auth:signout') as Promise<void>,
   appVersion: () => ipcRenderer.invoke('prime:app:version') as Promise<string>,
   checkUpdates: () => ipcRenderer.invoke('prime:update:check') as Promise<UpdateStatus>,
+  watcherStatus: () => ipcRenderer.invoke('prime:watcher:status') as Promise<WatcherStatus>,
+  scheduleWatcher: () => ipcRenderer.invoke('prime:watcher:schedule') as Promise<WatcherStatus>,
+  unscheduleWatcher: () => ipcRenderer.invoke('prime:watcher:unschedule') as Promise<WatcherStatus>,
   onProgress: (cb) => subscribe<ProgressEvent>('prime:progress', cb),
   onLog: (cb) => subscribe<string>('prime:log', cb),
   onExit: (cb) => subscribe<number | null>('prime:exit', cb),

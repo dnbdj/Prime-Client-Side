@@ -6,6 +6,7 @@ import type {
   MinecraftAccount,
   PrimeConfig,
   UpdateStatus,
+  WatcherStatus,
 } from '../../shared/api';
 
 type Props = {
@@ -69,11 +70,40 @@ export function SettingsView({
   const [appVersion, setAppVersion] = useState('');
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [watcher, setWatcher] = useState<WatcherStatus | null>(null);
+  const [watcherBusy, setWatcherBusy] = useState(false);
+  const [watcherMessage, setWatcherMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void window.prime.defaultGameDir().then(setDefaultDir);
     void window.prime.appVersion().then(setAppVersion).catch(() => setAppVersion(''));
+    void window.prime.watcherStatus().then(setWatcher).catch(() => setWatcher(null));
   }, []);
+
+  const changeWatcher = async (action: 'schedule' | 'unschedule') => {
+    setWatcherBusy(true);
+    setWatcherMessage(null);
+    try {
+      const next =
+        action === 'schedule'
+          ? await window.prime.scheduleWatcher()
+          : await window.prime.unscheduleWatcher();
+      setWatcher(next);
+      if (next.error) {
+        setWatcherMessage(next.error);
+      } else {
+        setWatcherMessage(
+          action === 'schedule'
+            ? `Windows will run the watcher every ${next.intervalMinutes} minutes, even with Prime closed.`
+            : 'Scheduled task removed — the watcher only runs while you start it yourself.',
+        );
+      }
+    } catch (error) {
+      setWatcherMessage(describe(error));
+    } finally {
+      setWatcherBusy(false);
+    }
+  };
 
   const describeUpdate = (status: UpdateStatus): string => {
     switch (status.status) {
@@ -431,6 +461,7 @@ export function SettingsView({
         ) : null}
 
         {tab === 'launcher' ? (
+          <>
           <section className="panel wide">
             <div className="panel-head">
               <h2 className="panel-title">When the game starts</h2>
@@ -469,6 +500,53 @@ export function SettingsView({
               </p>
             </div>
           </section>
+
+          <section className="panel wide">
+            <div className="panel-head">
+              <h2 className="panel-title">Background watcher</h2>
+              <span className={watcher?.installed ? 'chip green' : 'chip subtle'}>
+                {watcher?.installed ? 'Scheduled' : 'Not scheduled'}
+              </span>
+            </div>
+            <div className="panel-body">
+              <div className="chip-row">
+                {watcher?.installed ? (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={watcherBusy}
+                    onClick={() => void changeWatcher('unschedule')}
+                  >
+                    {watcherBusy ? 'Removing…' : 'Remove task'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary small"
+                    disabled={watcherBusy || !watcher?.supported}
+                    onClick={() => void changeWatcher('schedule')}
+                  >
+                    {watcherBusy ? 'Scheduling…' : 'Schedule watcher'}
+                  </button>
+                )}
+              </div>
+              {watcher?.installed ? (
+                <p className="note">
+                  Next run: {watcher.nextRun ?? 'at your next sign-in'} · Last run:{' '}
+                  {watcher.lastRun ?? 'never'}
+                  {watcher.lastResult ? ` (result ${watcher.lastResult})` : ''}
+                </p>
+              ) : null}
+              {watcher?.lastLogLine ? <p className="note mono">{watcher.lastLogLine}</p> : null}
+              {watcherMessage ? <p className="note">{watcherMessage}</p> : null}
+              <p className="note">
+                Checks the Wi-Fi every {watcher?.intervalMinutes ?? 30} minutes and runs Prime's
+                queued Minecraft install once the network can reach Mojang. Windows runs the task
+                itself, so the checks continue after Prime is closed.
+              </p>
+            </div>
+          </section>
+          </>
         ) : null}
 
         {tab === 'updates' ? (

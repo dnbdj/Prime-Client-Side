@@ -38,6 +38,7 @@ import { launch, type LaunchHandle } from './launch';
 import { defaultInstance } from '../shared/instances';
 import { backfillInstanceRecords, loadConfig, saveConfig } from './store';
 import { checkForUpdates } from './update';
+import { scheduleWatcher, unscheduleWatcher, watcherStatus } from './watcher';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
@@ -541,6 +542,11 @@ ipcMain.handle(
 
 // Validate that a Java runtime is usable before the user commits to it.
 ipcMain.handle('prime:java:check', async (_event, path: string) => verifyJava(path));
+
+// The Wi-Fi watcher as a Windows scheduled task, so it outlives this window.
+ipcMain.handle('prime:watcher:status', () => watcherStatus());
+ipcMain.handle('prime:watcher:schedule', () => scheduleWatcher());
+ipcMain.handle('prime:watcher:unschedule', () => unscheduleWatcher());
 
 void app.whenReady().then(() => {
   migrateInstanceDirs();
