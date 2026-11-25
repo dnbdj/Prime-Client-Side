@@ -6,7 +6,7 @@ import type {
   ProgressEvent,
   VersionSummary,
 } from '../shared/api';
-import { HomeIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
+import { HomeIcon, MoreIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
 import { HomeView } from './views/HomeView';
 import { SettingsView } from './views/SettingsView';
 import { VersionsView } from './views/VersionsView';
@@ -50,6 +50,8 @@ export function App() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const [accountMenu, setAccountMenu] = useState(false);
 
   const appendLog = useCallback((line: string) => {
     setLogs((current) => {
@@ -203,6 +205,39 @@ export function App() {
       .slice(0, 5);
   }, [config?.recent, versions]);
 
+  useEffect(() => {
+    if (!accountMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountMenu(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountMenu(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountMenu]);
+
+  const chooseMicrosoft = useCallback(() => {
+    setAccountMenu(false);
+    if (!account) setView('settings');
+  }, [account]);
+
+  const chooseOffline = useCallback(async () => {
+    setAccountMenu(false);
+    if (!account) return;
+    await window.prime.signOut().catch(() => undefined);
+    setAccount(null);
+  }, [account]);
+
+  const openAccountSettings = useCallback(() => {
+    setAccountMenu(false);
+    setView('settings');
+  }, []);
+
   const displayName = account?.name ?? (config?.username || 'No account');
 
   const percent = useMemo(() => {
@@ -256,7 +291,7 @@ export function App() {
             />
           </label>
 
-          <div className="account">
+          <div className="account" ref={accountMenuRef}>
             <span className="avatar" aria-hidden="true">
               {account?.skinUrl ? (
                 <img src={account.skinUrl} alt="" />
@@ -268,6 +303,59 @@ export function App() {
               <strong>{displayName}</strong>
               <span>{running ? 'In game' : account ? 'Microsoft account' : 'Offline mode'}</span>
             </div>
+            <span className="account-sep" aria-hidden="true" />
+            <button
+              type="button"
+              className="account-more"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded={accountMenu}
+              onClick={() => setAccountMenu((open) => !open)}
+            >
+              <MoreIcon />
+            </button>
+            {accountMenu ? (
+              <div className="account-menu" role="menu" aria-label="Account">
+                <span className="account-menu-label">Account</span>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={Boolean(account)}
+                  className="account-menu-item"
+                  onClick={chooseMicrosoft}
+                >
+                  <span className="account-menu-title">Microsoft account</span>
+                  <span className="account-menu-note">
+                    {account ? account.name : 'Not signed in - open Settings to sign in'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={!account}
+                  className="account-menu-item"
+                  onClick={() => void chooseOffline()}
+                >
+                  <span className="account-menu-title">Offline</span>
+                  <span className="account-menu-note">
+                    {config?.username || 'Player'}
+                    {account ? ' - signs out' : ''}
+                  </span>
+                </button>
+                <span className="account-menu-break" aria-hidden="true" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="account-menu-item account-menu-settings"
+                  onClick={openAccountSettings}
+                >
+                  <span className="account-menu-title">Account settings</span>
+                  <span className="account-menu-hint" aria-hidden="true">
+                    &rarr;
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
 

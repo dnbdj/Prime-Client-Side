@@ -48,6 +48,16 @@ export function SettingsIcon({ size = 19 }: IconProps) {
   );
 }
 
+export function MoreIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...frame(size)}>
+      <circle cx="5.2" cy="12" r="1.35" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none" />
+      <circle cx="18.8" cy="12" r="1.35" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function SearchIcon({ size = 16 }: IconProps) {
   return (
     <svg {...frame(size)}>

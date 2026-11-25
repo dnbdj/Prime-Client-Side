@@ -266,19 +266,22 @@ input::placeholder {
 }
 
 .account {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 4px 12px 4px 4px;
+  gap: 10px;
+  min-width: 232px;
+  padding: 4px 5px 4px 4px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
 }
 
 .avatar {
+  flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--eggplant);
@@ -288,6 +291,8 @@ input::placeholder {
 }
 
 .account-text {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   line-height: 1.2;
@@ -296,11 +301,117 @@ input::placeholder {
 .account-text strong {
   font-size: 12px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .account-text span {
   font-size: 10.5px;
   color: var(--dimmer);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-sep {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+}
+
+.account-more {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: none;
+  box-shadow: none;
+  color: var(--dim);
+}
+
+.account-more:hover,
+.account-more[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  z-index: 60;
+  width: 244px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.55);
+}
+
+.account-menu-label {
+  display: block;
+  padding: 7px 10px 5px;
+  color: var(--dimmer);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.account-menu-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+}
+
+.account-menu-item:hover {
+  background: var(--surface-3);
+}
+
+.account-menu-item[aria-checked='true'] {
+  background: var(--green-soft);
+}
+
+.account-menu-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.account-menu-note {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.account-menu-break {
+  display: block;
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--line);
+}
+
+.account-menu-settings {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.account-menu-hint {
+  color: var(--dimmer);
+  font-size: 12px;
 }
 
 .banner {
