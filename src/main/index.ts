@@ -682,15 +682,31 @@ ipcMain.handle('prime:watcher:status', () => watcherStatus());
 ipcMain.handle('prime:watcher:schedule', () => scheduleWatcher());
 ipcMain.handle('prime:watcher:unschedule', () => unscheduleWatcher());
 
-void app.whenReady().then(() => {
-  migrateInstanceDirs();
-  // Codes are read from GitHub; the cached copy is used when that fails.
-  void loadCatalog();
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+// One launcher at a time: a second start (a double-click, or the updater
+// restarting Prime while the old window is still closing) focuses the window
+// that already exists instead of opening another one.
+const primaryInstance = app.requestSingleInstanceLock();
+
+app.on('second-instance', () => {
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
 });
+
+if (!primaryInstance) {
+  app.quit();
+} else {
+  void app.whenReady().then(() => {
+    migrateInstanceDirs();
+    // Codes are read from GitHub; the cached copy is used when that fails.
+    void loadCatalog();
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
