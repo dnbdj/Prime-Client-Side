@@ -27,6 +27,7 @@ history from before numbered releases existed; they stay in place for archaeolog
 | Release | Version | Date | Summary |
 | --- | --- | --- | --- |
 | [v1](https://github.com/dnbdj/Prime-client/releases/tag/v1) | 1.0.0 | 2026-11-25 | First numbered release: installs and launches Minecraft, Fabric and Forge; per-instance folders, mods and settings |
+| [v1.1](https://github.com/dnbdj/Prime-client/releases/tag/v1.1) | 1.1.0 | 2026-11-25 | One-command releases with generated notes; auto-push race fix |
 
 ## Pre-versioning snapshots
 
