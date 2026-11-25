@@ -1,5 +1,4 @@
 import { app } from 'electron';
-import AdmZip from 'adm-zip';
 import { spawn } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -15,6 +14,41 @@ import { dirname, join } from 'node:path';
  */
 export type UpdateInstallResult = { ok: boolean; error?: string };
 
+function run(command: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited with ${code}. ${stderr.trim()}`.trim()));
+    });
+  });
+}
+
+/**
+ * Windows' own tar handles the zips PowerShell's Compress-Archive writes (their
+ * entries use backslashes, which adm-zip cannot map onto a folder). Expand-Archive
+ * is the fallback for machines without tar.exe.
+ */
+async function extract(zipPath: string, staging: string): Promise<void> {
+  mkdirSync(staging, { recursive: true });
+  const systemTar = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+  try {
+    await run(systemTar, ['-xf', zipPath, '-C', staging]);
+  } catch {
+    const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
+    await run('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      `Expand-Archive -LiteralPath ${quote(zipPath)} -DestinationPath ${quote(staging)} -Force`,
+    ]);
+  }
+}
+
 const APPLY_SCRIPT = `param(
   [int]$ProcessId,
   [string]$Source,
@@ -26,6 +60,8 @@ Start-Sleep -Milliseconds 900
 # /E copies over the old files without deleting anything the user put there.
 robocopy $Source $Target /E /R:3 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
 Start-Process -FilePath $Exe
+Remove-Item -Force (Join-Path (Split-Path $Source -Parent) 'update.zip') -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $Source -ErrorAction SilentlyContinue
 `;
 
 export async function installUpdate(
@@ -69,7 +105,7 @@ export async function installUpdate(
   onProgress(92);
 
   const staging = join(work, 'staging');
-  new AdmZip(zipPath).extractAllTo(staging, true);
+  await extract(zipPath, staging);
   onProgress(97);
 
   const scriptPath = join(work, 'apply-update.ps1');
