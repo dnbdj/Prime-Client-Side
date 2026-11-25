@@ -5,6 +5,7 @@ import type {
   MinecraftAccount,
   PrimeConfig,
   ProgressEvent,
+  UpdateStatus,
   VersionSummary,
 } from '../shared/api';
 import { defaultInstance, INSTANCE_LOADERS } from '../shared/instances';
@@ -62,6 +63,10 @@ export function App() {
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [accountMenu, setAccountMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<InstanceEntry | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [updatePrompt, setUpdatePrompt] = useState(false);
 
   const appendLog = useCallback((line: string) => {
     setLogs((current) => {
@@ -117,6 +122,7 @@ export function App() {
       .catch((err: unknown) => setError(describeError(err)));
 
     void loadVersions();
+    void window.prime.appVersion().then(setAppVersion).catch(() => undefined);
     void loadJava();
     void window.prime
       .getAccount()
@@ -315,16 +321,20 @@ export function App() {
     [config?.instances, instances, patchConfig],
   );
 
-  const removeInstance = useCallback(
-    async (entry: InstanceEntry) => {
+  /** Asks first: the native Windows prompt looked nothing like the app. */
+  const requestDelete = useCallback(
+    (entry: InstanceEntry) => {
       if (runningId === entry.id) {
         setError('Stop the game before deleting this instance.');
         return;
       }
-      const confirmed = window.confirm(
-        `Delete "${entry.name}"?\n\nThis removes the instance and, when it has its own folder under instances, that folder and its mods. The shared Minecraft folder is never deleted.`,
-      );
-      if (!confirmed) return;
+      setConfirmDelete(entry);
+    },
+    [runningId],
+  );
+
+  const removeInstance = useCallback(
+    async (entry: InstanceEntry) => {
       try {
         const result = await window.prime.deleteInstance(entry.id, entry.versionId, true);
         setConfig(result.config);
@@ -388,24 +398,40 @@ export function App() {
     };
   }, [accountMenu]);
 
-  const chooseMicrosoft = useCallback(() => {
-    setAccountMenu(false);
-    if (!account) setView('settings');
-  }, [account]);
+  // One GitHub check per launch; a release the user skipped is not offered again.
+  useEffect(() => {
+    const skipped = config?.skippedUpdateVersion ?? null;
+    const timer = setTimeout(() => {
+      void window.prime
+        .checkUpdates()
+        .then((status) => {
+          setUpdate(status);
+          if (status.status === 'available' && status.version !== skipped) {
+            setUpdatePrompt(true);
+          }
+        })
+        .catch(() => undefined);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [config?.skippedUpdateVersion]);
 
-  const chooseOffline = useCallback(async () => {
-    setAccountMenu(false);
-    if (!account) return;
-    await window.prime.signOut().catch(() => undefined);
-    setAccount(null);
-  }, [account]);
+  const chooseAccount = useCallback(
+    async (id: string) => {
+      setAccountMenu(false);
+      await patchConfig({ activeAccountId: id });
+      setAccount(await window.prime.getAccount().catch(() => null));
+    },
+    [patchConfig],
+  );
 
   const openAccountSettings = useCallback(() => {
     setAccountMenu(false);
     setView('settings');
   }, []);
 
-  const displayName = account?.name ?? (config?.username || 'No account');
+  const activeAccount =
+    config?.accounts.find((entry) => entry.id === config.activeAccountId) ?? config?.accounts[0];
+  const displayName = activeAccount?.name ?? (config?.username || 'No account');
 
   const percent = useMemo(() => {
     if (!progress || progress.total <= 0) return 0;
@@ -458,6 +484,18 @@ export function App() {
             />
           </label>
 
+          {update?.status === 'available' ? (
+            <button
+              type="button"
+              className="update-badge"
+              aria-label={`Update ${update.version} available`}
+              title={`Prime ${update.version} is available`}
+              onClick={() => setUpdatePrompt(true)}
+            >
+              <span className="update-dot" aria-hidden="true" />
+              Update
+            </button>
+          ) : null}
           <div className="account" ref={accountMenuRef}>
             <span className="avatar" aria-hidden="true">
               {account?.skinUrl ? (
@@ -483,32 +521,22 @@ export function App() {
             </button>
             {accountMenu ? (
               <div className="account-menu" role="menu" aria-label="Account">
-                <span className="account-menu-label">Account</span>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={Boolean(account)}
-                  className="account-menu-item"
-                  onClick={chooseMicrosoft}
-                >
-                  <span className="account-menu-title">Microsoft account</span>
-                  <span className="account-menu-note">
-                    {account ? account.name : 'Not signed in - open Settings to sign in'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={!account}
-                  className="account-menu-item"
-                  onClick={() => void chooseOffline()}
-                >
-                  <span className="account-menu-title">Offline</span>
-                  <span className="account-menu-note">
-                    {config?.username || 'Player'}
-                    {account ? ' - signs out' : ''}
-                  </span>
-                </button>
+                <span className="account-menu-label">Accounts</span>
+                {(config?.accounts ?? []).map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={entry.id === config?.activeAccountId}
+                    className="account-menu-item"
+                    onClick={() => void chooseAccount(entry.id)}
+                  >
+                    <span className="account-menu-title">{entry.name}</span>
+                    <span className="account-menu-note">
+                      {entry.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}
+                    </span>
+                  </button>
+                ))}
                 <span className="account-menu-break" aria-hidden="true" />
                 <button
                   type="button"
@@ -516,7 +544,7 @@ export function App() {
                   className="account-menu-item account-menu-settings"
                   onClick={openAccountSettings}
                 >
-                  <span className="account-menu-title">Account settings</span>
+                  <span className="account-menu-title">Add or manage accounts</span>
                   <span className="account-menu-hint" aria-hidden="true">
                     &rarr;
                   </span>
@@ -579,7 +607,7 @@ export function App() {
               onInstallLoader={(kind) =>
                 void handleInstallLoader(kind, activeInstance.version.id)
               }
-              onDelete={() => void removeInstance(activeInstance.entry)}
+              onDelete={() => requestDelete(activeInstance.entry)}
             />
           ) : view === 'instances' || (view === 'instance' && !activeInstance) ? (
             <InstancesView
@@ -599,7 +627,7 @@ export function App() {
                 setView('instance');
               }}
               onPlay={(entry) => void handleLaunch(entry.versionId, entry.id)}
-              onDelete={(entry) => void removeInstance(entry)}
+              onDelete={requestDelete}
               onStop={() => void handleStop()}
               onReloadVersions={loadVersions}
             />
@@ -615,6 +643,90 @@ export function App() {
           )}
         </main>
       </div>
+
+      {confirmDelete ? (
+        <div
+          className="update-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Delete ${confirmDelete.name}`}
+        >
+          <div className="update-modal">
+            <h2>Delete “{confirmDelete.name}”?</h2>
+            <p className="note">
+              This removes the instance and, when it has its own folder under{' '}
+              <code>instances/</code>, that folder and its mods. The shared Minecraft folder is
+              never deleted.
+            </p>
+            <div className="update-actions">
+              <button
+                type="button"
+                className="btn-ghost danger-text"
+                onClick={() => {
+                  const entry = confirmDelete;
+                  setConfirmDelete(null);
+                  void removeInstance(entry);
+                }}
+              >
+                Delete instance
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {update?.status === 'available' && updatePrompt ? (
+        <div
+          className="update-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Update available"
+        >
+          <div className="update-modal">
+            <span className="chip subtle">Update available</span>
+            <h2>Prime {update.version} is out</h2>
+            <p className="note">You are on {appVersion || 'an older build'}.</p>
+            {update.notes ? <pre className="update-notes">{update.notes}</pre> : null}
+            <div className="update-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setUpdatePrompt(false);
+                  const target = update.assetUrl ?? update.url;
+                  if (target) void window.prime.openExternal(target);
+                }}
+              >
+                {update.assetUrl ? 'Download update' : 'Open release page'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setUpdatePrompt(false)}
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  setUpdatePrompt(false);
+                  void patchConfig({ skippedUpdateVersion: update.version });
+                }}
+              >
+                Skip this version
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

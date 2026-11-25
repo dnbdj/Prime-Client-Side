@@ -31,6 +31,7 @@ import {
   signOut,
   startDeviceFlow,
 } from './auth';
+import { loadCatalog, lookupError, withCode } from './errorCodes';
 import { discoverJava, verifyJava } from './java';
 import { listVersions } from './install';
 import { installLoader, listBtaVersions, type LoaderKind } from './loaders';
@@ -170,7 +171,7 @@ ipcMain.handle(
     saveConfig({ versionId: installed.versionId });
     return { ok: true, versionId: installed.versionId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = withCode(error instanceof Error ? error.message : String(error));
     send('prime:log', `[prime] ${kind} install failed: ${message}`);
     return { ok: false, error: message };
   }
@@ -516,6 +517,10 @@ ipcMain.handle('prime:kill', () => {
 
 ipcMain.handle('prime:auth:account', () => currentAccount());
 
+ipcMain.handle('prime:errors:catalog', () => loadCatalog());
+
+ipcMain.handle('prime:errors:lookup', (_event, code: string) => lookupError(String(code ?? '')));
+
 ipcMain.handle('prime:auth:start', () => startDeviceFlow());
 
 ipcMain.handle('prime:auth:poll', () => pollDeviceFlow());
@@ -524,15 +529,15 @@ ipcMain.handle('prime:auth:cancel', () => {
   cancelDeviceFlow();
 });
 
-ipcMain.handle('prime:auth:signout', async () => {
-  await signOut();
+ipcMain.handle('prime:auth:signout', async (_event, accountId?: string) => {
+  await signOut(typeof accountId === 'string' && accountId.length > 0 ? accountId : undefined);
 });
 
 ipcMain.handle(
   'prime:launch',
   async (_event, versionId: string, instanceId?: string): Promise<LaunchResult> => {
-    if (session) return { ok: false, error: 'Minecraft is already running in this window.' };
-    if (!versionId) return { ok: false, error: 'No Minecraft version selected.' };
+    if (session) return { ok: false, error: withCode('Minecraft is already running in this window.') };
+    if (!versionId) return { ok: false, error: withCode('No Minecraft version selected.') };
 
     const config = loadConfig();
     const rootDir = minecraftRoot();
@@ -545,14 +550,29 @@ ipcMain.handle(
     const launchId = instance?.id ?? `v:${launchVersion}`;
     const gameDir = instanceGameDir(launchId, launchVersion);
 
+  // The active account decides the name and, for Microsoft accounts, the token.
+  const active =
+    config.accounts.find((entry) => entry.id === config.activeAccountId) ?? config.accounts[0];
   let auth: Awaited<ReturnType<typeof launchAuth>> = null;
   try {
-    auth = await launchAuth();
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    auth = active?.kind === 'microsoft' ? await launchAuth(active.id) : null;
+    } catch (error) {
+    return {
+      ok: false,
+      error: withCode(error instanceof Error ? error.message : String(error)),
+    };
   }
 
-  const username = auth?.name ?? (config.username.trim() || 'Player');
+  if (active?.kind === 'microsoft' && !auth) {
+    return {
+      ok: false,
+      error: withCode(
+        'That Microsoft account is signed out. Sign in again in Settings, or switch to an offline account.',
+      ),
+    };
+  }
+
+  const username = auth?.name ?? active?.name ?? (config.username.trim() || 'Player');
   // A version-level override wins; the Settings value is the fallback.
   const override = config.versionJvmArgs?.[launchVersion]?.trim();
   const jvmArgs = override && override.length > 0 ? override : config.jvmArgs;
@@ -650,6 +670,8 @@ ipcMain.handle('prime:watcher:unschedule', () => unscheduleWatcher());
 
 void app.whenReady().then(() => {
   migrateInstanceDirs();
+  // Codes are read from GitHub; the cached copy is used when that fails.
+  void loadCatalog();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

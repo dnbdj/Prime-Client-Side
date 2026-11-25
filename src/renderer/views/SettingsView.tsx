@@ -8,6 +8,7 @@ import type {
   UpdateStatus,
   WatcherStatus,
 } from '../../shared/api';
+import { offlineAccountId } from '../../shared/accounts';
 
 type Props = {
   config: PrimeConfig | null;
@@ -73,6 +74,7 @@ export function SettingsView({
   const [watcher, setWatcher] = useState<WatcherStatus | null>(null);
   const [watcherBusy, setWatcherBusy] = useState(false);
   const [watcherMessage, setWatcherMessage] = useState<string | null>(null);
+  const [newOfflineName, setNewOfflineName] = useState('');
 
   useEffect(() => {
     void window.prime.defaultGameDir().then(setDefaultDir);
@@ -108,9 +110,9 @@ export function SettingsView({
   const describeUpdate = (status: UpdateStatus): string => {
     switch (status.status) {
       case 'unconfigured':
-        return 'No updates configured — add a feed URL to check for a new build.';
+        return 'Update checks are turned off.';
       case 'current':
-        return `Up to date. Feed offers ${status.version}.`;
+        return `Up to date. Latest release is ${status.version}.`;
       case 'available':
         return `Version ${status.version} is available.${status.notes ? ` ${status.notes}` : ''}`;
       default:
@@ -139,9 +141,16 @@ export function SettingsView({
           const result = await window.prime.pollSignIn();
           if (cancelled) return;
           if (result.status === 'done' && result.account) {
+            const signedIn = result.account;
+            const accountId = result.accountId ?? `ms:${signedIn.uuid}`;
+            const next = [
+              ...(config?.accounts ?? []).filter((entry) => entry.id !== accountId),
+              { id: accountId, kind: 'microsoft' as const, name: signedIn.name, uuid: signedIn.uuid },
+            ];
             setFlow(null);
-            setAuthMessage(`Signed in as ${result.account.name}.`);
-            onAccountChange(result.account);
+            setAuthMessage(`Signed in as ${signedIn.name}.`);
+            onPatch({ accounts: next, activeAccountId: accountId });
+            onAccountChange(signedIn);
           } else if (result.status === 'error') {
             setFlow(null);
             setAuthMessage(result.error ?? 'Sign-in failed.');
@@ -156,7 +165,7 @@ export function SettingsView({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [flow, onAccountChange]);
+  }, [flow, onAccountChange, onPatch, config?.accounts]);
 
   const gameDir = config?.gameDir ?? defaultDir;
   const ram = config?.ramMb ?? 4096;
@@ -192,10 +201,36 @@ export function SettingsView({
     setFlow(null);
   };
 
-  const signOut = async () => {
-    await window.prime.signOut();
+  const accounts = config?.accounts ?? [];
+
+  const useAccount = async (id: string) => {
+    onPatch({ activeAccountId: id });
+    onAccountChange(await window.prime.getAccount().catch(() => null));
+    setAuthMessage(null);
+  };
+
+  const addOfflineAccount = async () => {
+    const name = newOfflineName.trim();
+    if (name.length === 0) return;
+    const id = offlineAccountId(name);
+    const exists = accounts.some((entry) => entry.id === id);
+    const next = exists
+      ? accounts.map((entry) => (entry.id === id ? { ...entry, name } : entry))
+      : [...accounts, { id, kind: 'offline' as const, name, uuid: null }];
+    onPatch({ accounts: next, activeAccountId: id, username: name });
+    setNewOfflineName('');
+    setAuthMessage(`Added offline account ${name}.`);
     onAccountChange(null);
-    setAuthMessage('Signed out.');
+  };
+
+  const removeAccount = async (id: string) => {
+    const next = accounts.filter((entry) => entry.id !== id);
+    await window.prime.signOut(id).catch(() => undefined);
+    const activeAccountId =
+      config?.activeAccountId === id ? (next[0]?.id ?? null) : (config?.activeAccountId ?? null);
+    onPatch({ accounts: next, activeAccountId });
+    onAccountChange(await window.prime.getAccount().catch(() => null));
+    setAuthMessage('Account removed.');
   };
 
   return (
@@ -232,24 +267,73 @@ export function SettingsView({
               </span>
             </div>
             <div className="panel-body">
-              {account ? (
-                <div className="account-row">
-                  <span className="avatar large">
-                    {account.skinUrl ? (
-                      <img src={account.skinUrl} alt="" />
-                    ) : (
-                      account.name.slice(0, 1).toUpperCase()
-                    )}
-                  </span>
-                  <div className="account-identity">
-                    <strong>{account.name}</strong>
-                    <span className="mono">{account.uuid}</span>
+              <div className="account-list">
+                {accounts.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={
+                      entry.id === config?.activeAccountId ? 'account-entry on' : 'account-entry'
+                    }
+                  >
+                    <span className="avatar">
+                      {account && entry.uuid === account.uuid && account.skinUrl ? (
+                        <img src={account.skinUrl} alt="" />
+                      ) : (
+                        entry.name.slice(0, 1).toUpperCase()
+                      )}
+                    </span>
+                    <div className="account-identity">
+                      <strong>{entry.name}</strong>
+                      <span className="mono">
+                        {entry.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}
+                      </span>
+                    </div>
+                    <div className="account-actions">
+                      {entry.id === config?.activeAccountId ? (
+                        <span className="chip subtle">In use</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => void useAccount(entry.id)}
+                        >
+                          Use
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-ghost danger-text"
+                        onClick={() => void removeAccount(entry.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                  <button type="button" className="btn-ghost" onClick={() => void signOut()}>
-                    Sign out
-                  </button>
-                </div>
-              ) : flow ? (
+                ))}
+              </div>
+
+              <div className="account-add">
+                <label className="field">
+                  <span>New offline account</span>
+                  <input
+                    value={newOfflineName}
+                    maxLength={16}
+                    spellCheck={false}
+                    placeholder="Steve"
+                    onChange={(event) => setNewOfflineName(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={newOfflineName.trim().length === 0}
+                  onClick={() => void addOfflineAccount()}
+                >
+                  Add offline account
+                </button>
+              </div>
+
+              {flow ? (
                 <div className="session">
                   <p className="note">{flow.message}</p>
                   <span className="session-code">{flow.userCode}</span>
@@ -278,16 +362,6 @@ export function SettingsView({
                 </div>
               ) : (
                 <>
-                  <label className="field">
-                    <span>Offline player name</span>
-                    <input
-                      value={config?.username ?? ''}
-                      maxLength={16}
-                      spellCheck={false}
-                      placeholder="Steve"
-                      onChange={(event) => onPatch({ username: event.target.value })}
-                    />
-                  </label>
                   <div className="chip-row">
                     <button
                       type="button"
@@ -295,7 +369,7 @@ export function SettingsView({
                       onClick={() => void beginSignIn()}
                       disabled={authBusy}
                     >
-                      {authBusy ? 'Opening…' : 'Sign in with Microsoft'}
+                      {authBusy ? 'Opening…' : 'Add Microsoft account'}
                     </button>
                   </div>
                   <p className="note">

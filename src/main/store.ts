@@ -12,15 +12,19 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { PrimeConfig } from '../shared/api';
+import { normalizeAccounts } from '../shared/accounts';
 import { normalizeInstances } from '../shared/instances';
 
 const DEFAULTS: PrimeConfig = {
   username: 'Player',
+  accounts: [],
+  activeAccountId: null,
   ramMb: 4096,
   jvmArgs: '',
   versionJvmArgs: {},
   afterLaunch: 'keep',
   updateFeed: null,
+  skippedUpdateVersion: null,
   javaPath: null,
   gameDir: null,
   versionId: null,
@@ -93,8 +97,13 @@ function readConfigFile(path: string): PrimeConfig | null {
       ...rest,
       afterLaunch: rest.afterLaunch ?? (closeOnLaunch ? 'close' : DEFAULTS.afterLaunch),
     };
-    // Older configs stored a plain list of version ids for instances.
-    return { ...merged, instances: normalizeInstances(merged.instances) };
+    // Older configs stored a plain list of version ids for instances and only a
+    // single offline name, so both lists are normalised on every read.
+    return {
+      ...merged,
+      instances: normalizeInstances(merged.instances),
+      ...normalizeAccounts(merged),
+    };
   } catch {
     return null;
   }

@@ -9,6 +9,8 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DeviceCode, MinecraftAccount, SignInPoll } from '../shared/api';
+import { microsoftAccountId } from '../shared/accounts';
+import { loadConfig } from './store';
 
 /**
  * Public client used against the consumers tenant; no secret is involved, the
@@ -43,20 +45,36 @@ function authPath(): string {
   return join(app.getPath('userData'), 'accounts.json');
 }
 
-function read(): Tokens | null {
+type TokenStore = { version: 2; tokens: Record<string, Tokens> };
+
+/** Tokens are stored per account; files written by older builds held just one. */
+function readStore(): TokenStore {
   try {
-    const parsed = JSON.parse(readFileSync(authPath(), 'utf8')) as Partial<Tokens>;
-    if (!parsed.refreshToken || !parsed.account) return null;
-    return parsed as Tokens;
+    const raw = JSON.parse(readFileSync(authPath(), 'utf8')) as
+      | { version?: number; tokens?: Record<string, Tokens> }
+      | Partial<Tokens>;
+    const store = raw as { version?: number; tokens?: Record<string, Tokens> };
+    if (store.version === 2 && store.tokens && typeof store.tokens === 'object') {
+      return { version: 2, tokens: store.tokens };
+    }
+    const legacy = raw as Partial<Tokens>;
+    if (legacy.refreshToken && legacy.account) {
+      return {
+        version: 2,
+        tokens: { [microsoftAccountId(legacy.account.uuid)]: legacy as Tokens },
+      };
+    }
   } catch {
-    return null;
+    // First run, or another instance is rewriting the file right now.
   }
+  return { version: 2, tokens: {} };
 }
 
 const TICK = new Int32Array(new SharedArrayBuffer(4));
 
 /** Serialise writes: a second launcher instance may be refreshing at the same time. */
-function write(tokens: Tokens | null): void {
+function writeStore(store: TokenStore): void {
+  const text = JSON.stringify(store, null, 2);
   const target = authPath();
   const lock = `${target}.lock`;
   mkdirSync(dirname(target), { recursive: true });
@@ -70,7 +88,7 @@ function write(tokens: Tokens | null): void {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       if (Date.now() > deadline) {
         rmSync(lock, { force: true });
-        writeFileSync(target, tokens ? JSON.stringify(tokens, null, 2) : '{}', 'utf8');
+        writeFileSync(target, text, 'utf8');
         return;
       }
       Atomics.wait(TICK, 0, 0, 25);
@@ -78,7 +96,7 @@ function write(tokens: Tokens | null): void {
     }
 
     try {
-      writeFileSync(target, tokens ? JSON.stringify(tokens, null, 2) : '{}', 'utf8');
+      writeFileSync(target, text, 'utf8');
       return;
     } finally {
       closeSync(fd);
@@ -233,7 +251,10 @@ async function mintMinecraft(msAccessToken: string): Promise<Omit<Tokens, 'refre
 }
 
 export function currentAccount(): MinecraftAccount | null {
-  return read()?.account ?? null;
+  const config = loadConfig();
+  const active = config.accounts.find((entry) => entry.id === config.activeAccountId);
+  if (!active || active.kind !== 'microsoft') return null;
+  return readStore().tokens[active.id]?.account ?? null;
 }
 
 export async function startDeviceFlow(): Promise<DeviceCode> {
@@ -313,8 +334,11 @@ export async function pollDeviceFlow(): Promise<SignInPoll> {
       refreshToken: payload.refresh_token ?? '',
       ...minted,
     };
-    write(tokens);
-    return { status: 'done', account: tokens.account };
+    const accountId = microsoftAccountId(tokens.account.uuid);
+    const store = readStore();
+    store.tokens[accountId] = tokens;
+    writeStore(store);
+    return { status: 'done', account: tokens.account, accountId };
   } catch (error) {
     return { status: 'error', error: error instanceof Error ? error.message : String(error) };
   }
@@ -324,9 +348,13 @@ export function cancelDeviceFlow(): void {
   pending = null;
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(accountId?: string): Promise<void> {
   pending = null;
-  write(null);
+  const store = readStore();
+  const id = accountId ?? loadConfig().activeAccountId;
+  if (id) delete store.tokens[id];
+  else store.tokens = {};
+  writeStore(store);
 }
 
 export type LaunchAuth = {
@@ -340,12 +368,19 @@ export type LaunchAuth = {
  * Minecraft token for the game, refreshed when it is close to expiring. Returns
  * null when nobody is signed in, so the caller falls back to offline mode.
  */
-export async function launchAuth(): Promise<LaunchAuth | null> {
-  const stored = read();
+export async function launchAuth(accountId?: string): Promise<LaunchAuth | null> {
+  const config = loadConfig();
+  const id = accountId ?? config.activeAccountId;
+  if (!id) return null;
+  const entry = config.accounts.find((candidate) => candidate.id === id);
+  if (!entry || entry.kind !== 'microsoft') return null;
+
+  const store = readStore();
+  const stored = store.tokens[id];
   if (!stored) return null;
 
   const fresh =
-    stored.expiresAt - Date.now() > 60_000 ? stored : await refresh(stored.refreshToken);
+    stored.expiresAt - Date.now() > 60_000 ? stored : await refresh(stored.refreshToken, id);
   return {
     accessToken: fresh.accessToken,
     uuid: fresh.account.uuid,
@@ -354,7 +389,7 @@ export async function launchAuth(): Promise<LaunchAuth | null> {
   };
 }
 
-async function refresh(refreshToken: string): Promise<Tokens> {
+async function refresh(refreshToken: string, accountId: string): Promise<Tokens> {
   if (!refreshToken) throw new Error('Your Microsoft session expired. Sign in again in Settings.');
 
   const payload = await postForm<TokenResponse & { error_description?: string }>(
@@ -374,6 +409,8 @@ async function refresh(refreshToken: string): Promise<Tokens> {
     refreshToken: payload.refresh_token ?? refreshToken,
     ...minted,
   };
-  write(tokens);
+  const store = readStore();
+  store.tokens[accountId] = tokens;
+  writeStore(store);
   return tokens;
 }

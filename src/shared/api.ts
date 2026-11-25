@@ -100,6 +100,10 @@ export type AfterLaunch = 'keep' | 'minimise' | 'close';
 export type PrimeConfig = {
   /** Offline-mode player name used for the ${auth_player_name} argument. */
   username: string;
+  /** Every account the launcher can switch to; always at least one offline. */
+  accounts: AccountEntry[];
+  /** Id of the account launches use. */
+  activeAccountId: string | null;
   ramMb: number;
   /** Global JVM flags, used when a version has no override of its own. */
   jvmArgs: string;
@@ -107,8 +111,10 @@ export type PrimeConfig = {
   versionJvmArgs: Record<string, string>;
   /** What the launcher window does once the game has started. */
   afterLaunch: AfterLaunch;
-  /** JSON update feed URL, or null when updates are not configured. */
+  /** JSON update feed URL, or null to check this project's GitHub releases. */
   updateFeed: string | null;
+  /** Release the user chose to skip, so it is not offered again. */
+  skippedUpdateVersion: string | null;
   /** Explicit Java executable, or null to auto-detect. */
   javaPath: string | null;
   /** Override for the working directory Minecraft runs in. */
@@ -161,6 +167,25 @@ export type MinecraftAccount = {
   skinUrl: string | null;
 };
 
+/** One entry of the error-code catalog stored in the repository. */
+export type ErrorEntry = {
+  code: string;
+  area: string;
+  title: string;
+  message: string;
+  fix: string;
+};
+
+/** One selectable account: an offline name or a signed-in Microsoft account. */
+export type AccountEntry = {
+  /** Stable id: offline:<slug> or ms:<uuid>. */
+  id: string;
+  kind: 'offline' | 'microsoft';
+  name: string;
+  /** Microsoft accounts only; offline accounts derive theirs from the name. */
+  uuid: string | null;
+};
+
 /** One step of the Microsoft device-code sign-in flow. */
 export type DeviceCode = {
   userCode: string;
@@ -176,6 +201,8 @@ export type SignInPoll = {
   status: 'pending' | 'done' | 'error';
   error?: string;
   account?: MinecraftAccount;
+  /** Account id the finished sign-in was stored under. */
+  accountId?: string;
 };
 
 /** State of the Windows scheduled task that runs the Wi-Fi watcher. */
@@ -199,7 +226,15 @@ export type WatcherStatus = {
 export type UpdateStatus =
   | { status: 'unconfigured' }
   | { status: 'current'; version: string }
-  | { status: 'available'; version: string; url: string | null; notes: string | null }
+  | {
+      status: 'available';
+      version: string;
+      url: string | null;
+      notes: string | null;
+      /** Direct download of the newest release asset, when it has one. */
+      assetUrl?: string | null;
+      assetName?: string | null;
+    }
   | { status: 'error'; error: string };
 
 export type PrimeApi = {
@@ -253,7 +288,11 @@ export type PrimeApi = {
   startSignIn(): Promise<DeviceCode>;
   pollSignIn(): Promise<SignInPoll>;
   cancelSignIn(): Promise<void>;
-  signOut(): Promise<void>;
+  /** Drops the stored tokens for one account (or the active one). */
+  signOut(accountId?: string): Promise<void>;
+  /** Error-code catalog published in the repository. */
+  errorCatalog(): Promise<ErrorEntry[]>;
+  lookupError(code: string): Promise<ErrorEntry | null>;
   appVersion(): Promise<string>;
   checkUpdates(): Promise<UpdateStatus>;
   watcherStatus(): Promise<WatcherStatus>;

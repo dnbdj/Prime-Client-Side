@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type {
   DeviceCode,
+  ErrorEntry,
   InstanceDeleteResult,
   JavaCandidate,
   JavaCheckResult,
@@ -73,7 +74,10 @@ const api: PrimeApi = {
   startSignIn: () => ipcRenderer.invoke('prime:auth:start') as Promise<DeviceCode>,
   pollSignIn: () => ipcRenderer.invoke('prime:auth:poll') as Promise<SignInPoll>,
   cancelSignIn: () => ipcRenderer.invoke('prime:auth:cancel') as Promise<void>,
-  signOut: () => ipcRenderer.invoke('prime:auth:signout') as Promise<void>,
+  signOut: (accountId) =>
+    ipcRenderer.invoke('prime:auth:signout', accountId) as Promise<void>,
+  errorCatalog: () => ipcRenderer.invoke('prime:errors:catalog') as Promise<ErrorEntry[]>,
+  lookupError: (code) => ipcRenderer.invoke('prime:errors:lookup', code) as Promise<ErrorEntry | null>,
   appVersion: () => ipcRenderer.invoke('prime:app:version') as Promise<string>,
   checkUpdates: () => ipcRenderer.invoke('prime:update:check') as Promise<UpdateStatus>,
   watcherStatus: () => ipcRenderer.invoke('prime:watcher:status') as Promise<WatcherStatus>,

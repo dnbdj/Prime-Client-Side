@@ -1,0 +1,702 @@
+[
+  {
+    "code": "PRM-001",
+    "area": "Install",
+    "title": "Version not found",
+    "message": "The launcher could not find that Minecraft version.",
+    "fix": "Reload the version list, then pick the version again."
+  },
+  {
+    "code": "PRM-002",
+    "area": "Install",
+    "title": "Download failed",
+    "message": "A file did not finish downloading.",
+    "fix": "Check your connection and press Play again; finished files are kept."
+  },
+  {
+    "code": "PRM-003",
+    "area": "Install",
+    "title": "Checksum mismatch",
+    "message": "A downloaded file did not match its SHA-1.",
+    "fix": "Delete the .part file and retry; if it repeats, change network."
+  },
+  {
+    "code": "PRM-004",
+    "area": "Install",
+    "title": "Client jar missing",
+    "message": "The version has no client jar on disk.",
+    "fix": "Run the install again while online, or copy the jar in from another install."
+  },
+  {
+    "code": "PRM-005",
+    "area": "Install",
+    "title": "Library download blocked",
+    "message": "A library URL was refused.",
+    "fix": "Try a different network; some school filters block Maven hosts."
+  },
+  {
+    "code": "PRM-006",
+    "area": "Install",
+    "title": "Assets incomplete",
+    "message": "The asset index finished but objects are missing.",
+    "fix": "Run the install again; assets resume where they stopped."
+  },
+  {
+    "code": "PRM-007",
+    "area": "Install",
+    "title": "Native extraction failed",
+    "message": "A native library could not be unpacked.",
+    "fix": "Close the game, delete versions/<id>/natives and relaunch."
+  },
+  {
+    "code": "PRM-008",
+    "area": "Install",
+    "title": "Disk full",
+    "message": "There is not enough free space.",
+    "fix": "Free space on the drive holding the Minecraft folder."
+  },
+  {
+    "code": "PRM-009",
+    "area": "Install",
+    "title": "Permission denied",
+    "message": "The game folder is not writable.",
+    "fix": "Move the game folder somewhere your user owns, or fix its permissions."
+  },
+  {
+    "code": "PRM-010",
+    "area": "Install",
+    "title": "Unknown loader version",
+    "message": "The loader has no build for that Minecraft version.",
+    "fix": "Pick another loader or Minecraft version."
+  },
+  {
+    "code": "PRM-011",
+    "area": "Launch",
+    "title": "Game already running",
+    "message": "A game session is already open in this window.",
+    "fix": "Close the running game before starting another."
+  },
+  {
+    "code": "PRM-012",
+    "area": "Launch",
+    "title": "Version inherits too deeply",
+    "message": "A profile points at itself through parents.",
+    "fix": "Reinstall the loader profile."
+  },
+  {
+    "code": "PRM-013",
+    "area": "Launch",
+    "title": "Main class missing",
+    "message": "The profile names a main class that is not on the classpath.",
+    "fix": "Reinstall the loader; a library is missing."
+  },
+  {
+    "code": "PRM-014",
+    "area": "Launch",
+    "title": "Class not found",
+    "message": "The game could not load a class.",
+    "fix": "Check the mods folder for a jar built for another version."
+  },
+  {
+    "code": "PRM-015",
+    "area": "Launch",
+    "title": "Mixin apply failed",
+    "message": "A mod mixin could not be applied.",
+    "fix": "Remove the newest mod and try again."
+  },
+  {
+    "code": "PRM-016",
+    "area": "Launch",
+    "title": "Duplicate ASM",
+    "message": "Two copies of ASM are on the classpath.",
+    "fix": "Remove the duplicate library or the mod bundling it."
+  },
+  {
+    "code": "PRM-017",
+    "area": "Launch",
+    "title": "Window did not open",
+    "message": "The process started but no window appeared.",
+    "fix": "Check the session log; a graphics driver or LWJGL issue is common."
+  },
+  {
+    "code": "PRM-018",
+    "area": "Launch",
+    "title": "Game exited immediately",
+    "message": "The game quit before reaching the menu.",
+    "fix": "Read the log in the console card for the first error."
+  },
+  {
+    "code": "PRM-019",
+    "area": "Launch",
+    "title": "Session log missing",
+    "message": "The launcher could not open a log file.",
+    "fix": "Check free space and the logs folder."
+  },
+  {
+    "code": "PRM-020",
+    "area": "Launch",
+    "title": "Launch cancelled",
+    "message": "The launch stopped before the game started.",
+    "fix": "Try again; if it repeats, check the console output."
+  },
+  {
+    "code": "PRM-021",
+    "area": "Java",
+    "title": "No Java found",
+    "message": "No Java runtime was detected.",
+    "fix": "Set a Java path in Settings or let Prime download one."
+  },
+  {
+    "code": "PRM-022",
+    "area": "Java",
+    "title": "Java too old",
+    "message": "The version needs a newer Java than the one found.",
+    "fix": "Install the runtime the version asks for, or use auto."
+  },
+  {
+    "code": "PRM-023",
+    "area": "Java",
+    "title": "Java path invalid",
+    "message": "That path is not a Java executable.",
+    "fix": "Pick java.exe from a runtime folder."
+  },
+  {
+    "code": "PRM-024",
+    "area": "Java",
+    "title": "Runtime download failed",
+    "message": "Mojang's runtime could not be downloaded.",
+    "fix": "Retry on a network that can reach Mojang."
+  },
+  {
+    "code": "PRM-025",
+    "area": "Java",
+    "title": "Runtime unpack failed",
+    "message": "The downloaded runtime would not extract.",
+    "fix": "Delete the runtimes folder entry and retry."
+  },
+  {
+    "code": "PRM-026",
+    "area": "Java",
+    "title": "Java crashed",
+    "message": "The JVM exited with an error.",
+    "fix": "Lower memory or update Java; check the log."
+  },
+  {
+    "code": "PRM-027",
+    "area": "Java",
+    "title": "Heap too large",
+    "message": "The requested heap is larger than the system can give.",
+    "fix": "Lower the memory in Settings."
+  },
+  {
+    "code": "PRM-028",
+    "area": "Java",
+    "title": "32-bit Java",
+    "message": "A 32-bit runtime was picked.",
+    "fix": "Use a 64-bit Java for modern versions."
+  },
+  {
+    "code": "PRM-029",
+    "area": "Java",
+    "title": "Java check timed out",
+    "message": "The runtime did not answer -version.",
+    "fix": "Pick another runtime."
+  },
+  {
+    "code": "PRM-030",
+    "area": "Java",
+    "title": "Unsupported Java",
+    "message": "That Java version is not supported by this game version.",
+    "fix": "Use the runtime the version requests."
+  },
+  {
+    "code": "PRM-031",
+    "area": "Auth",
+    "title": "Signed out",
+    "message": "The Microsoft account has no stored token.",
+    "fix": "Sign in again in Settings."
+  },
+  {
+    "code": "PRM-032",
+    "area": "Auth",
+    "title": "No Xbox profile",
+    "message": "The account has never created an Xbox profile.",
+    "fix": "Sign in at xbox.com once, then retry."
+  },
+  {
+    "code": "PRM-033",
+    "area": "Auth",
+    "title": "Family group",
+    "message": "A family group must approve this account.",
+    "fix": "Ask the family organiser to approve, then retry."
+  },
+  {
+    "code": "PRM-034",
+    "area": "Auth",
+    "title": "Does not own Minecraft",
+    "message": "The account has no Java Edition profile.",
+    "fix": "Use the account that bought Minecraft: Java Edition."
+  },
+  {
+    "code": "PRM-035",
+    "area": "Auth",
+    "title": "Consent blocked",
+    "message": "Microsoft refused consent for the sign-in app.",
+    "fix": "Use a personal Microsoft account, not a work or school one."
+  },
+  {
+    "code": "PRM-036",
+    "area": "Auth",
+    "title": "Code expired",
+    "message": "The device code expired before it was approved.",
+    "fix": "Start the sign-in again and approve promptly."
+  },
+  {
+    "code": "PRM-037",
+    "area": "Auth",
+    "title": "Sign-in declined",
+    "message": "The approval was declined in the browser.",
+    "fix": "Start again and approve the code."
+  },
+  {
+    "code": "PRM-038",
+    "area": "Auth",
+    "title": "Token refresh failed",
+    "message": "The stored token could not be refreshed.",
+    "fix": "Sign out and sign in again."
+  },
+  {
+    "code": "PRM-039",
+    "area": "Auth",
+    "title": "Sign-in window closed",
+    "message": "The app closed before the code was exchanged.",
+    "fix": "Keep Prime open until it says signed in."
+  },
+  {
+    "code": "PRM-040",
+    "area": "Auth",
+    "title": "Profile lookup failed",
+    "message": "Minecraft services did not return a profile.",
+    "fix": "Retry; if it repeats, check minecraft.net status."
+  },
+  {
+    "code": "PRM-041",
+    "area": "Network",
+    "title": "Mojang unreachable",
+    "message": "The launcher could not reach Mojang.",
+    "fix": "Check the connection, VPN or proxy, then reload."
+  },
+  {
+    "code": "PRM-042",
+    "area": "Network",
+    "title": "DNS failure",
+    "message": "A host name did not resolve.",
+    "fix": "Check DNS or try another network."
+  },
+  {
+    "code": "PRM-043",
+    "area": "Network",
+    "title": "TLS failure",
+    "message": "The secure connection failed.",
+    "fix": "Check the system clock and any proxy."
+  },
+  {
+    "code": "PRM-044",
+    "area": "Network",
+    "title": "Proxy refused",
+    "message": "A proxy rejected the request.",
+    "fix": "Fix the proxy settings in Windows."
+  },
+  {
+    "code": "PRM-045",
+    "area": "Network",
+    "title": "Timeout",
+    "message": "A request took too long.",
+    "fix": "Retry; large downloads can time out on slow links."
+  },
+  {
+    "code": "PRM-046",
+    "area": "Network",
+    "title": "Filtered network",
+    "message": "The network blocks this host.",
+    "fix": "Use a network without the filter."
+  },
+  {
+    "code": "PRM-047",
+    "area": "Network",
+    "title": "Rate limited",
+    "message": "The server asked the launcher to slow down.",
+    "fix": "Wait a minute and retry."
+  },
+  {
+    "code": "PRM-048",
+    "area": "Network",
+    "title": "Server error",
+    "message": "The remote server returned an error.",
+    "fix": "Retry later."
+  },
+  {
+    "code": "PRM-049",
+    "area": "Network",
+    "title": "Offline mode",
+    "message": "No network is available.",
+    "fix": "Connect to use online features; offline play still works."
+  },
+  {
+    "code": "PRM-050",
+    "area": "Network",
+    "title": "Manifest unavailable",
+    "message": "The version manifest could not be loaded.",
+    "fix": "Reload; a cached list is used when offline."
+  },
+  {
+    "code": "PRM-051",
+    "area": "Mods",
+    "title": "No compatible file",
+    "message": "No mod file matches this version and loader.",
+    "fix": "Pick another mod or version."
+  },
+  {
+    "code": "PRM-052",
+    "area": "Mods",
+    "title": "CurseForge key missing",
+    "message": "CurseForge needs an API key.",
+    "fix": "Add a key in Settings or use Modrinth."
+  },
+  {
+    "code": "PRM-053",
+    "area": "Mods",
+    "title": "Mod copy failed",
+    "message": "A mod jar could not be copied.",
+    "fix": "Check the file is not locked and the folder is writable."
+  },
+  {
+    "code": "PRM-054",
+    "area": "Mods",
+    "title": "Mods folder missing",
+    "message": "The instance has no mods folder yet.",
+    "fix": "Open the instance and add a mod once."
+  },
+  {
+    "code": "PRM-055",
+    "area": "Mods",
+    "title": "Wrong loader",
+    "message": "The mod was built for another loader.",
+    "fix": "Download the build for this loader."
+  },
+  {
+    "code": "PRM-056",
+    "area": "Mods",
+    "title": "Wrong game version",
+    "message": "The mod targets a different Minecraft version.",
+    "fix": "Pick the file for this version."
+  },
+  {
+    "code": "PRM-057",
+    "area": "Mods",
+    "title": "Duplicate mod",
+    "message": "The same mod is installed twice.",
+    "fix": "Remove one copy from the mods folder."
+  },
+  {
+    "code": "PRM-058",
+    "area": "Mods",
+    "title": "BTA mods elsewhere",
+    "message": "BTA mods are not on Modrinth or CurseForge.",
+    "fix": "Get them from betterthanadventure.net."
+  },
+  {
+    "code": "PRM-059",
+    "area": "Mods",
+    "title": "Search failed",
+    "message": "The mod search request failed.",
+    "fix": "Retry, or check the connection."
+  },
+  {
+    "code": "PRM-060",
+    "area": "Mods",
+    "title": "Download failed",
+    "message": "A mod download did not finish.",
+    "fix": "Retry the install."
+  },
+  {
+    "code": "PRM-061",
+    "area": "Config",
+    "title": "Config unreadable",
+    "message": "The config file could not be parsed.",
+    "fix": "The last good backup is restored automatically."
+  },
+  {
+    "code": "PRM-062",
+    "area": "Config",
+    "title": "Backup restored",
+    "message": "Prime restored the previous config.",
+    "fix": "Check your instances and settings."
+  },
+  {
+    "code": "PRM-063",
+    "area": "Config",
+    "title": "Config write failed",
+    "message": "The config could not be saved.",
+    "fix": "Check free space and permissions."
+  },
+  {
+    "code": "PRM-064",
+    "area": "Config",
+    "title": "Lock timeout",
+    "message": "Another instance held the config lock.",
+    "fix": "Close other Prime windows and retry."
+  },
+  {
+    "code": "PRM-065",
+    "area": "Config",
+    "title": "Instance missing",
+    "message": "That instance record no longer exists.",
+    "fix": "Reload the instances page."
+  },
+  {
+    "code": "PRM-066",
+    "area": "Config",
+    "title": "Instance folder missing",
+    "message": "The instance folder was deleted outside Prime.",
+    "fix": "Create a new instance or point the record at an existing folder."
+  },
+  {
+    "code": "PRM-067",
+    "area": "Config",
+    "title": "Duplicate instance id",
+    "message": "Two records share an id.",
+    "fix": "Remove the duplicate from the list."
+  },
+  {
+    "code": "PRM-068",
+    "area": "Config",
+    "title": "Invalid instance name",
+    "message": "The name is empty or too long.",
+    "fix": "Use 1-48 characters."
+  },
+  {
+    "code": "PRM-069",
+    "area": "Config",
+    "title": "Accounts file unreadable",
+    "message": "Stored accounts could not be read.",
+    "fix": "Sign in again; tokens are re-created."
+  },
+  {
+    "code": "PRM-070",
+    "area": "Config",
+    "title": "Unsupported config version",
+    "message": "The config is newer than this build.",
+    "fix": "Update Prime."
+  },
+  {
+    "code": "PRM-071",
+    "area": "Update",
+    "title": "Update check failed",
+    "message": "GitHub did not answer the release check.",
+    "fix": "Retry later; the app works without it."
+  },
+  {
+    "code": "PRM-072",
+    "area": "Update",
+    "title": "No releases",
+    "message": "The repository has no published release.",
+    "fix": "Publish a release or ignore this."
+  },
+  {
+    "code": "PRM-073",
+    "area": "Update",
+    "title": "Asset missing",
+    "message": "The latest release has no downloadable build.",
+    "fix": "Open the release page instead."
+  },
+  {
+    "code": "PRM-074",
+    "area": "Update",
+    "title": "Download failed",
+    "message": "The update download did not finish.",
+    "fix": "Retry from the release page."
+  },
+  {
+    "code": "PRM-075",
+    "area": "Update",
+    "title": "Version compare failed",
+    "message": "A release tag could not be read.",
+    "fix": "Check the tag format (v1.2)."
+  },
+  {
+    "code": "PRM-076",
+    "area": "Update",
+    "title": "Update skipped",
+    "message": "This release was skipped by choice.",
+    "fix": "Clear the skip in Settings to be offered it again."
+  },
+  {
+    "code": "PRM-077",
+    "area": "Update",
+    "title": "Release page blocked",
+    "message": "The browser could not open the release page.",
+    "fix": "Open github.com manually."
+  },
+  {
+    "code": "PRM-078",
+    "area": "Update",
+    "title": "Checksum missing",
+    "message": "The release has no checksum to verify.",
+    "fix": "Verify the download by size."
+  },
+  {
+    "code": "PRM-079",
+    "area": "Update",
+    "title": "Running from source",
+    "message": "This build is not a packaged release.",
+    "fix": "Updates apply to packaged builds."
+  },
+  {
+    "code": "PRM-080",
+    "area": "Update",
+    "title": "Feed invalid",
+    "message": "The custom update feed is not valid JSON.",
+    "fix": "Fix or clear the feed URL."
+  },
+  {
+    "code": "PRM-081",
+    "area": "Instance",
+    "title": "Delete blocked",
+    "message": "The instance is running.",
+    "fix": "Stop the game first."
+  },
+  {
+    "code": "PRM-082",
+    "area": "Instance",
+    "title": "Folder delete failed",
+    "message": "The instance folder could not be removed.",
+    "fix": "Close anything using it and retry."
+  },
+  {
+    "code": "PRM-083",
+    "area": "Instance",
+    "title": "Instance dir create failed",
+    "message": "The instance folder could not be created.",
+    "fix": "Check permissions for the Minecraft folder."
+  },
+  {
+    "code": "PRM-084",
+    "area": "Instance",
+    "title": "Game dir not writable",
+    "message": "The game folder is read-only.",
+    "fix": "Pick another game folder in Settings."
+  },
+  {
+    "code": "PRM-085",
+    "area": "Instance",
+    "title": "Options copy failed",
+    "message": "options.txt could not be copied.",
+    "fix": "Copy it manually from the old folder."
+  },
+  {
+    "code": "PRM-086",
+    "area": "Instance",
+    "title": "Mods folder open failed",
+    "message": "Explorer could not open the folder.",
+    "fix": "Open it manually from the path shown."
+  },
+  {
+    "code": "PRM-087",
+    "area": "Instance",
+    "title": "Loader install failed",
+    "message": "The loader installer returned an error.",
+    "fix": "Check the console output for the installer message."
+  },
+  {
+    "code": "PRM-088",
+    "area": "Instance",
+    "title": "Loader profile unreadable",
+    "message": "The loader wrote a profile Prime cannot read.",
+    "fix": "Reinstall the loader."
+  },
+  {
+    "code": "PRM-089",
+    "area": "Instance",
+    "title": "Agent jar missing",
+    "message": "The Java agent jar was not found.",
+    "fix": "Pick the jar again."
+  },
+  {
+    "code": "PRM-090",
+    "area": "Instance",
+    "title": "Unsupported loader",
+    "message": "That loader is not available yet.",
+    "fix": "Pick a working loader."
+  },
+  {
+    "code": "PRM-091",
+    "area": "Misc",
+    "title": "Unexpected error",
+    "message": "Something failed without a specific reason.",
+    "fix": "Copy the console output when reporting it."
+  },
+  {
+    "code": "PRM-092",
+    "area": "Misc",
+    "title": "Cancelled",
+    "message": "The action was cancelled.",
+    "fix": "Start it again when ready."
+  },
+  {
+    "code": "PRM-093",
+    "area": "Misc",
+    "title": "Not implemented",
+    "message": "That feature is planned, not built.",
+    "fix": "Use the working path for now."
+  },
+  {
+    "code": "PRM-094",
+    "area": "Misc",
+    "title": "Invalid input",
+    "message": "A field has a value the app cannot use.",
+    "fix": "Fix the highlighted field."
+  },
+  {
+    "code": "PRM-095",
+    "area": "Misc",
+    "title": "File not found",
+    "message": "A file the app expected is gone.",
+    "fix": "Reinstall or re-add the file."
+  },
+  {
+    "code": "PRM-096",
+    "area": "Misc",
+    "title": "Access denied",
+    "message": "Windows refused access to a path.",
+    "fix": "Run from a folder your user owns."
+  },
+  {
+    "code": "PRM-097",
+    "area": "Misc",
+    "title": "Disk read error",
+    "message": "A file could not be read.",
+    "fix": "Check the drive health and retry."
+  },
+  {
+    "code": "PRM-098",
+    "area": "Misc",
+    "title": "Process start failed",
+    "message": "The game process could not start.",
+    "fix": "Check the Java path and antivirus."
+  },
+  {
+    "code": "PRM-099",
+    "area": "Misc",
+    "title": "Watcher task failed",
+    "message": "The scheduled watcher could not run.",
+    "fix": "Re-register it in Settings."
+  },
+  {
+    "code": "PRM-100",
+    "area": "Misc",
+    "title": "Unknown error",
+    "message": "An error with no mapping occurred.",
+    "fix": "Report it with the console output and this code."
+  }
+]
