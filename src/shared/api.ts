@@ -35,6 +35,9 @@ export type LoaderInstallResult = {
   versionId?: string;
 };
 
+/** What the launcher window does once a game process is running. */
+export type AfterLaunch = 'keep' | 'minimise' | 'close';
+
 export type PrimeConfig = {
   /** Offline-mode player name used for the ${auth_player_name} argument. */
   username: string;
@@ -43,8 +46,8 @@ export type PrimeConfig = {
   jvmArgs: string;
   /** Per-version JVM flag overrides, keyed by Minecraft version id. */
   versionJvmArgs: Record<string, string>;
-  /** Quit the launcher once the game process has started. */
-  closeOnLaunch: boolean;
+  /** What the launcher window does once the game has started. */
+  afterLaunch: AfterLaunch;
   /** JSON update feed URL, or null when updates are not configured. */
   updateFeed: string | null;
   /** Explicit Java executable, or null to auto-detect. */

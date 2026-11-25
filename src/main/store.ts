@@ -16,7 +16,7 @@ const DEFAULTS: PrimeConfig = {
   ramMb: 4096,
   jvmArgs: '',
   versionJvmArgs: {},
-  closeOnLaunch: false,
+  afterLaunch: 'keep',
   updateFeed: null,
   javaPath: null,
   gameDir: null,
@@ -68,8 +68,16 @@ function withLock<T>(fn: () => T): T {
 /** Read fresh from disk: another instance may have written since the last call. */
 export function loadConfig(): PrimeConfig {
   try {
-    const parsed = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<PrimeConfig>;
-    const merged = { ...DEFAULTS, ...parsed };
+    const parsed = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<PrimeConfig> & {
+      /** Older configs had a single boolean instead of afterLaunch. */
+      closeOnLaunch?: boolean;
+    };
+    const { closeOnLaunch, ...rest } = parsed;
+    const merged = {
+      ...DEFAULTS,
+      ...rest,
+      afterLaunch: rest.afterLaunch ?? (closeOnLaunch ? 'close' : DEFAULTS.afterLaunch),
+    };
     // Older configs stored a plain list of version ids for instances.
     return { ...merged, instances: normalizeInstances(merged.instances) };
   } catch {

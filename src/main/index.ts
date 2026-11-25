@@ -204,6 +204,7 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     writeLog(`[prime] Launcher instance ${process.pid}`);
     writeLog(`[prime] Session log: ${logPath}`);
     writeLog(`[prime] JVM flags: ${jvmArgs.trim() || '(none)'}${override ? ' (version override)' : ' (global)'}`);
+    writeLog(`[prime] After launch: ${config.afterLaunch}`);
     const recent = [
       { versionId, playedAt: new Date().toISOString() },
       ...(config.recent ?? []).filter((entry) => entry.versionId !== versionId),
@@ -218,11 +219,15 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
         : [defaultInstance(versionId), ...config.instances],
     });
 
-    if (config.closeOnLaunch) {
+    if (config.afterLaunch === 'close') {
       // Forget the handle first: before-quit only kills a session it still owns,
       // so the game keeps running once the launcher is gone.
       session = null;
       setTimeout(() => app.quit(), 900);
+    } else if (config.afterLaunch === 'minimise') {
+      setTimeout(() => {
+        if (window && !window.isDestroyed()) window.minimize();
+      }, 900);
     }
 
     return { ok: true, pid: session?.pid, logPath };
