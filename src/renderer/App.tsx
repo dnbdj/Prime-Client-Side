@@ -238,8 +238,12 @@ export function App() {
   const addInstance = useCallback(
     async (entry: InstanceEntry) => {
       const current = config?.instances ?? [];
+      // New instances get their own game folder; the main process owns the path.
+      const gameDir =
+        entry.gameDir ?? (await window.prime.instanceDir(entry.versionId).catch(() => undefined));
+      const record = gameDir ? { ...entry, gameDir } : entry;
       const next = [
-        entry,
+        record,
         ...current.filter(
           (candidate) =>
             candidate.versionId !== entry.versionId || candidate.name !== entry.name,

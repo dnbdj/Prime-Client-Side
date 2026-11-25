@@ -303,7 +303,7 @@ export function SettingsView({
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2 className="panel-title">Game folder</h2>
+                <h2 className="panel-title">Game folders</h2>
                 <div className="chip-row">
                   <button
                     type="button"
@@ -335,7 +335,11 @@ export function SettingsView({
                   spellCheck={false}
                   onChange={(event) => onPatch({ gameDir: event.target.value || null })}
                 />
-                <p className="note">Leave empty to use the folder Prime manages.</p>
+                <p className="note">
+                  Base folder for Prime. Each instance keeps its own game folder under{' '}
+                  <code>instances/</code>, so mods and worlds stay separate. Leave empty to use the
+                  folder Prime manages.
+                </p>
               </div>
             </section>
           </>

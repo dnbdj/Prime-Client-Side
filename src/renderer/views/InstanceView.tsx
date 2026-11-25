@@ -56,13 +56,16 @@ export function InstanceView({
 
   const refreshMods = useCallback(async () => {
     try {
-      const [files, dir] = await Promise.all([window.prime.listMods(), window.prime.modsDir()]);
+      const [files, dir] = await Promise.all([
+        window.prime.listMods(entry.versionId),
+        window.prime.modsDir(entry.versionId),
+      ]);
       setMods(files);
       setModsDir(dir);
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     }
-  }, []);
+  }, [entry.versionId]);
 
   useEffect(() => {
     void refreshMods();
@@ -72,7 +75,7 @@ export function InstanceView({
     setModsBusy(true);
     setModsError(null);
     try {
-      setMods(await window.prime.addMods());
+      setMods(await window.prime.addMods(entry.versionId));
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -84,7 +87,7 @@ export function InstanceView({
     setModsBusy(true);
     setModsError(null);
     try {
-      setMods(await window.prime.removeMod(file));
+      setMods(await window.prime.removeMod(entry.versionId, file));
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -275,7 +278,7 @@ export function InstanceView({
                 type="button"
                 className="btn-ghost"
                 disabled={modsBusy}
-                onClick={() => void window.prime.openMods()}
+                onClick={() => void window.prime.openMods(entry.versionId)}
               >
                 Open folder
               </button>
@@ -314,8 +317,8 @@ export function InstanceView({
 
             <p className="note">
               {modsDir
-                ? `Loaded from ${modsDir} - every instance using this game folder sees these files.`
-                : 'Mods are read from the mods folder in the game directory.'}
+                ? `This instance's own folder: ${modsDir.replace(/[\\/]mods$/, '')}. Other instances cannot see these files.`
+                : "Mods are read from this instance's own game folder."}
             </p>
             <p className="note">
               Mods only do something with a loader that supports them: Fabric or Forge.

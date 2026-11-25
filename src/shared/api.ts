@@ -27,6 +27,12 @@ export type InstanceEntry = {
   loader: InstanceLoader;
   content: InstanceContent;
   createdAt: string;
+  /**
+   * This instance's own game directory. Instances that predate per-instance
+   * folders keep pointing at the old shared directory so their saves and
+   * options stay where they were.
+   */
+  gameDir?: string;
 };
 
 export type LoaderInstallResult = {
@@ -138,11 +144,14 @@ export type PrimeApi = {
   launch(versionId: string): Promise<LaunchResult>;
   installLoader(kind: LoaderKind, gameVersion: string): Promise<LoaderInstallResult>;
   kill(): Promise<boolean>;
-  listMods(): Promise<ModFile[]>;
-  addMods(): Promise<ModFile[]>;
-  removeMod(name: string): Promise<ModFile[]>;
-  modsDir(): Promise<string>;
-  openMods(): Promise<void>;
+  instanceDir(versionId: string): Promise<string>;
+  listMods(versionId: string): Promise<ModFile[]>;
+  addMods(versionId: string): Promise<ModFile[]>;
+  /** Copies jars from explicit paths; the UI dialog and tests both land here. */
+  addModsFrom(versionId: string, paths: string[]): Promise<ModFile[]>;
+  removeMod(versionId: string, name: string): Promise<ModFile[]>;
+  modsDir(versionId: string): Promise<string>;
+  openMods(versionId: string): Promise<void>;
   openPath(path: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   defaultGameDir(): Promise<string>;

@@ -33,11 +33,15 @@ const api: PrimeApi = {
   installLoader: (kind, gameVersion) =>
     ipcRenderer.invoke('prime:loader:install', kind, gameVersion) as Promise<LoaderInstallResult>,
   kill: () => ipcRenderer.invoke('prime:kill') as Promise<boolean>,
-  listMods: () => ipcRenderer.invoke('prime:mods:list') as Promise<ModFile[]>,
-  addMods: () => ipcRenderer.invoke('prime:mods:add') as Promise<ModFile[]>,
-  removeMod: (name) => ipcRenderer.invoke('prime:mods:remove', name) as Promise<ModFile[]>,
-  modsDir: () => ipcRenderer.invoke('prime:mods:dir') as Promise<string>,
-  openMods: () => ipcRenderer.invoke('prime:mods:open') as Promise<void>,
+  instanceDir: (versionId) => ipcRenderer.invoke('prime:instance:dir', versionId) as Promise<string>,
+  listMods: (versionId) => ipcRenderer.invoke('prime:mods:list', versionId) as Promise<ModFile[]>,
+  addMods: (versionId) => ipcRenderer.invoke('prime:mods:add', versionId) as Promise<ModFile[]>,
+  addModsFrom: (versionId, paths) =>
+    ipcRenderer.invoke('prime:mods:addFrom', versionId, paths) as Promise<ModFile[]>,
+  removeMod: (versionId, name) =>
+    ipcRenderer.invoke('prime:mods:remove', versionId, name) as Promise<ModFile[]>,
+  modsDir: (versionId) => ipcRenderer.invoke('prime:mods:dir', versionId) as Promise<string>,
+  openMods: (versionId) => ipcRenderer.invoke('prime:mods:open', versionId) as Promise<void>,
   openPath: (path) => ipcRenderer.invoke('prime:open', path) as Promise<void>,
   openExternal: (url) => ipcRenderer.invoke('prime:external', url) as Promise<void>,
   defaultGameDir: () => ipcRenderer.invoke('prime:dir:default') as Promise<string>,

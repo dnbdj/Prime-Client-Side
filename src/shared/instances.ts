@@ -43,6 +43,7 @@ export function defaultInstance(versionId: string, extra: Partial<InstanceEntry>
     loader: extra.loader ?? 'vanilla',
     content: defaultContent(extra.content),
     createdAt: extra.createdAt ?? new Date().toISOString(),
+    ...(extra.gameDir ? { gameDir: extra.gameDir } : {}),
   };
 }
 

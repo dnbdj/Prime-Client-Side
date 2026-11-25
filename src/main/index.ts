@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } fr
 import {
   copyFileSync,
   createWriteStream,
+  existsSync,
   mkdirSync,
   readdirSync,
   rmSync,
@@ -139,16 +140,48 @@ ipcMain.handle('prime:open', async (_event, target: string) => {
 });
 
 /**
- * Mods live in the game folder Minecraft actually boots from, so they load for
- * every instance that shares that folder.
+ * Instances each boot from their own game folder. Instances that existed before
+ * per-instance folders keep the old shared folder, so their saves, options and
+ * resource packs stay exactly where they were.
  */
-function modsDirectory(): string {
-  const config = loadConfig();
-  return join(config.gameDir ?? minecraftRoot(), 'mods');
+function legacyGameDir(): string {
+  return loadConfig().gameDir ?? minecraftRoot();
 }
 
-function listModFiles(): ModFile[] {
-  const dir = modsDirectory();
+function safeDirName(versionId: string): string {
+  return versionId.replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '') || 'instance';
+}
+
+function instanceGameDir(versionId: string): string {
+  const entry = loadConfig().instances.find((candidate) => candidate.versionId === versionId);
+  if (typeof entry?.gameDir === 'string' && entry.gameDir.length > 0) return entry.gameDir;
+  // New instances live under the base folder the player chose in Settings.
+  return join(legacyGameDir(), 'instances', safeDirName(versionId));
+}
+
+/** Records written before per-instance folders are pinned to the shared one. */
+function migrateInstanceDirs(): void {
+  const config = loadConfig();
+  const needsPin = config.instances.some(
+    (entry) => typeof entry.gameDir !== 'string' || entry.gameDir.length === 0,
+  );
+  if (!needsPin) return;
+  const legacy = legacyGameDir();
+  saveConfig({
+    instances: config.instances.map((entry) =>
+      typeof entry.gameDir === 'string' && entry.gameDir.length > 0
+        ? entry
+        : { ...entry, gameDir: legacy },
+    ),
+  });
+}
+
+function modsDirectory(versionId: string): string {
+  return join(instanceGameDir(versionId), 'mods');
+}
+
+function listModFiles(versionId: string): ModFile[] {
+  const dir = modsDirectory(versionId);
   try {
     return readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /\.(jar|zip)$/i.test(entry.name))
@@ -159,17 +192,33 @@ function listModFiles(): ModFile[] {
   }
 }
 
-ipcMain.handle('prime:mods:list', () => listModFiles());
+/** Shared by the file dialog and the explicit-path entry point. */
+function copyMods(versionId: string, files: string[]): ModFile[] {
+  const dir = modsDirectory(versionId);
+  mkdirSync(dir, { recursive: true });
+  for (const file of files) {
+    try {
+      copyFileSync(file, join(dir, basename(file)));
+    } catch {
+      // A file that vanished or is locked is skipped; the list shows what landed.
+    }
+  }
+  return listModFiles(versionId);
+}
 
-ipcMain.handle('prime:mods:dir', () => modsDirectory());
+ipcMain.handle('prime:instance:dir', (_event, versionId: string) => instanceGameDir(versionId));
 
-ipcMain.handle('prime:mods:open', async () => {
-  const dir = modsDirectory();
+ipcMain.handle('prime:mods:list', (_event, versionId: string) => listModFiles(versionId));
+
+ipcMain.handle('prime:mods:dir', (_event, versionId: string) => modsDirectory(versionId));
+
+ipcMain.handle('prime:mods:open', async (_event, versionId: string) => {
+  const dir = modsDirectory(versionId);
   mkdirSync(dir, { recursive: true });
   await shell.openPath(dir);
 });
 
-ipcMain.handle('prime:mods:add', async (): Promise<ModFile[]> => {
+ipcMain.handle('prime:mods:add', async (_event, versionId: string): Promise<ModFile[]> => {
   const options: OpenDialogOptions = {
     title: 'Add mods',
     buttonLabel: 'Add to mods',
@@ -179,24 +228,26 @@ ipcMain.handle('prime:mods:add', async (): Promise<ModFile[]> => {
   const picked = window
     ? await dialog.showOpenDialog(window, options)
     : await dialog.showOpenDialog(options);
-  if (picked.canceled || picked.filePaths.length === 0) return listModFiles();
-
-  const dir = modsDirectory();
-  mkdirSync(dir, { recursive: true });
-  for (const file of picked.filePaths) {
-    try {
-      copyFileSync(file, join(dir, basename(file)));
-    } catch {
-      // A file that vanished or is locked is skipped; the list shows what landed.
-    }
-  }
-  return listModFiles();
+  if (picked.canceled || picked.filePaths.length === 0) return listModFiles(versionId);
+  return copyMods(versionId, picked.filePaths);
 });
 
-ipcMain.handle('prime:mods:remove', (_event, name: string): ModFile[] => {
-  if (typeof name !== 'string' || name.length === 0 || name !== basename(name)) return listModFiles();
-  rmSync(join(modsDirectory(), name), { force: true });
-  return listModFiles();
+// Explicit-path entry point: the same copy the dialog performs, without the
+// native picker, so the add path is testable.
+ipcMain.handle('prime:mods:addFrom', (_event, versionId: string, paths: string[]): ModFile[] => {
+  if (!Array.isArray(paths)) return listModFiles(versionId);
+  return copyMods(
+    versionId,
+    paths.filter((path): path is string => typeof path === 'string' && path.length > 0),
+  );
+});
+
+ipcMain.handle('prime:mods:remove', (_event, versionId: string, name: string): ModFile[] => {
+  if (typeof name !== 'string' || name.length === 0 || name !== basename(name)) {
+    return listModFiles(versionId);
+  }
+  rmSync(join(modsDirectory(versionId), name), { force: true });
+  return listModFiles(versionId);
 });
 
 ipcMain.handle('prime:external', async (_event, url: string) => {
@@ -231,7 +282,7 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
 
   const config = loadConfig();
   const rootDir = minecraftRoot();
-  const gameDir = config.gameDir ?? rootDir;
+  const gameDir = instanceGameDir(versionId);
 
   let auth: Awaited<ReturnType<typeof launchAuth>> = null;
   try {
@@ -247,6 +298,13 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
 
   try {
     mkdirSync(gameDir, { recursive: true });
+    // A fresh instance folder still gets the player's video settings, so they
+    // do not have to redo them; worlds stay where they were, per instance.
+    const legacyOptions = join(legacyGameDir(), 'options.txt');
+    const instanceOptions = join(gameDir, 'options.txt');
+    if (gameDir !== legacyGameDir() && !existsSync(instanceOptions) && existsSync(legacyOptions)) {
+      copyFileSync(legacyOptions, instanceOptions);
+    }
     const logPath = startSessionLog(versionId);
     const writeLog = (line: string) => {
       sessionLog?.write(`${line}\n`);
@@ -288,7 +346,7 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
       // record when the version was never set up.
       instances: config.instances.some((entry) => entry.versionId === versionId)
         ? config.instances
-        : [defaultInstance(versionId), ...config.instances],
+        : [defaultInstance(versionId, { gameDir }), ...config.instances],
     });
 
     if (config.afterLaunch === 'close') {
@@ -314,6 +372,7 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
 ipcMain.handle('prime:java:check', async (_event, path: string) => verifyJava(path));
 
 void app.whenReady().then(() => {
+  migrateInstanceDirs();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
