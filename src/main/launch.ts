@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { closeSync, openSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ProgressEvent } from '../shared/api';
 import { prepare, type ArgEntry, type VersionJson } from './install';
@@ -23,6 +24,11 @@ export type LaunchOptions = {
   jvmArgs?: string;
   /** Signed-in Microsoft account; null launches offline. */
   auth?: LaunchAccount | null;
+  /**
+   * Append the game's own output to this file and detach it from the launcher,
+   * so the game survives the launcher quitting (close-on-launch mode).
+   */
+  detachedLogFile?: string;
   progress: (event: ProgressEvent) => void;
   log: (line: string) => void;
   exit: (code: number | null) => void;
@@ -165,11 +171,19 @@ export async function launch(options: LaunchOptions): Promise<LaunchHandle> {
   log(`[prime] Account: ${options.username} (${options.auth ? 'Microsoft' : 'offline'})`);
   log(`[prime] Game directory: ${options.gameDir}`);
 
+  // A piped stdout belongs to this process: once the launcher quits, the game's
+  // next console write hits a broken pipe and the game dies with it. Writing to a
+  // file instead keeps a detached game alive after we are gone.
+  const logFd = options.detachedLogFile ? openSync(options.detachedLogFile, 'a') : null;
   const child: ChildProcess = spawn(javaPath, [...command.jvm, command.mainClass, ...command.game], {
     cwd: options.gameDir,
     env: { ...process.env },
     windowsHide: true,
+    detached: logFd !== null,
+    stdio: logFd !== null ? ['ignore', logFd, logFd] : 'pipe',
   });
+  if (logFd !== null) closeSync(logFd);
+  if (logFd !== null) child.unref();
 
   const forward = (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split(/\r?\n/)) {

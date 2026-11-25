@@ -193,6 +193,9 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
       javaPath: config.javaPath,
       jvmArgs,
       auth,
+      // In close-on-launch mode the game is detached with its output in the log
+      // file, so quitting the launcher does not take the game down with it.
+      detachedLogFile: config.afterLaunch === 'close' ? logPath : undefined,
       progress: (event: ProgressEvent) => send('prime:progress', event),
       log: writeLog,
       exit: (code) => {
