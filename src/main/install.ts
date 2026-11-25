@@ -40,7 +40,7 @@ export type VersionJson = {
   inheritsFrom?: string;
   releaseTime?: string;
   /** Set on profiles Prime installed itself. */
-  primeLoader?: 'fabric' | 'forge' | 'quilt';
+  primeLoader?: 'fabric' | 'forge' | 'quilt' | 'legacyfabric';
 };
 
 type Manifest = {
@@ -252,12 +252,20 @@ export async function prepare(versionId: string, rootDir: string, progress: Prog
     const nativeClassifier = library.natives?.[osKey()];
     if (nativeClassifier) {
       const key = nativeClassifier.replace('${arch}', process.arch === 'ia32' ? '32' : '64');
-      const artifact = library.downloads?.classifiers?.[key];
+      // Metadata with `downloads` names the classifier jars outright. Loader
+      // profiles that only give a maven repo have natives jars named
+      // <artifact>-<version>-<classifier>.jar and no plain jar at all.
+      const artifact =
+        library.downloads?.classifiers?.[key] ??
+        (library.downloads ? null : mavenArtifact(`${library.name}:${key}`, library.url));
       if (artifact) {
         const dest = join(librariesDir, artifact.path);
         natives.push({ artifact, dest });
         if (needsDownload(dest)) files.push({ artifact, dest });
       }
+      // Natives-only entries stay off the classpath; asking for their base jar
+      // would only fetch a 404.
+      if (!library.downloads) continue;
     }
 
     // Modern metadata ships natives as ordinary `:natives-windows` artifacts.

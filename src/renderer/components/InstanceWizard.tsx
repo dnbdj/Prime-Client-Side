@@ -32,7 +32,7 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for old beta versions.', planned: true },
   { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
   { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
-  { id: 'legacy-fabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.', planned: true },
+  { id: 'legacyfabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.' },
   { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for older versions.', planned: true },
   {
     id: 'modloader',
@@ -63,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge and Quilt work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, Quilt and Legacy Fabric work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -122,14 +122,14 @@ export function InstanceWizard({
 
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
-  const needsInstall = loader === 'fabric' || loader === 'forge' || loader === 'quilt';
+  const needsInstall =
+    loader === 'fabric' || loader === 'forge' || loader === 'quilt' || loader === 'legacyfabric';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
 
-  // Fabric, Forge and Quilt are real installs, not labels: run the same
-  // installer the detail panel uses and only create the instance once a
-  // profile exists.
+  // The working loaders are real installs, not labels: run the same installer
+  // the detail panel uses and only create the instance once a profile exists.
   const finish = async () => {
     if (!pending || installing) return;
     setInstall({ status: 'idle' });
@@ -233,7 +233,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge and Quilt are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, Quilt and Legacy Fabric are the working choices today.'}
             </p>
           </>
         ) : null}

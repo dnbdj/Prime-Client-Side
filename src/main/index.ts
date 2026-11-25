@@ -117,7 +117,7 @@ ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
-  if (kind !== 'fabric' && kind !== 'forge' && kind !== 'quilt') {
+  if (kind !== 'fabric' && kind !== 'forge' && kind !== 'quilt' && kind !== 'legacyfabric') {
     return { ok: false, error: 'Unknown loader.' };
   }
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };

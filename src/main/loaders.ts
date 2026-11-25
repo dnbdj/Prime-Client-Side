@@ -6,7 +6,7 @@ import { downloadFile, fetchJson } from './net';
 import { discoverJava } from './java';
 import { prepare, resolveVersion, type VersionJson } from './install';
 
-export type LoaderKind = 'fabric' | 'forge' | 'quilt';
+export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric';
 
 export type LoaderInstall = {
   versionId: string;
@@ -17,6 +17,7 @@ export type LoaderInstall = {
 
 type FabricLoader = { loader: { version: string; stable: boolean } };
 type QuiltLoader = { loader: { version: string } };
+type LegacyFabricLoader = { loader: { version: string; stable?: boolean } };
 
 /** 0.30.2 / 0.31.0-beta.6 -> numbers; a stable release outranks its prereleases. */
 function quiltRank(version: string): { parts: number[]; prerelease: number } {
@@ -49,6 +50,7 @@ type Promotions = { promos: Record<string, string> };
 
 const FABRIC_META = 'https://meta.fabricmc.net/v2/versions';
 const QUILT_META = 'https://meta.quiltmc.org/v3/versions';
+const LEGACY_FABRIC_META = 'https://meta.legacyfabric.net/v2/versions';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -161,6 +163,64 @@ export async function installQuilt(
 
   progress({ phase: 'loader', current: 3, total: 3, label: 'Quilt installed' });
   return { versionId: profile.id, kind: 'quilt', gameVersion, loaderVersion };
+}
+
+/**
+ * Legacy Fabric keeps its own meta and intermediary for old versions, but it
+ * serves the same Fabric-shaped profile, so the install follows Fabric's.
+ */
+export async function installLegacyFabric(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({
+    phase: 'loader',
+    current: 0,
+    total: 3,
+    label: `Looking up Legacy Fabric for ${gameVersion}`,
+  });
+  const loaders = await fetchJson<LegacyFabricLoader[]>(
+    `${LEGACY_FABRIC_META}/loader/${encodeURIComponent(gameVersion)}`,
+  );
+  if (!Array.isArray(loaders) || loaders.length === 0) {
+    throw new Error(`Legacy Fabric has no loader build for Minecraft ${gameVersion}.`);
+  }
+  const loader = loaders.find((entry) => entry.loader.stable) ?? loaders[0];
+  log(`[prime] Legacy Fabric loader ${loader.loader.version} for ${gameVersion}`);
+
+  progress({ phase: 'loader', current: 1, total: 3, label: 'Fetching Legacy Fabric profile' });
+  const profile = await fetchJson<VersionJson>(
+    `${LEGACY_FABRIC_META}/loader/${encodeURIComponent(gameVersion)}/${encodeURIComponent(loader.loader.version)}/profile/json`,
+  );
+  if (!profile.id || profile.inheritsFrom !== gameVersion) {
+    throw new Error(`Legacy Fabric returned an unexpected profile for ${gameVersion}.`);
+  }
+  profile.primeLoader = 'legacyfabric';
+  profile.releaseTime = profile.releaseTime ?? new Date().toISOString();
+  log(
+    `[prime] Legacy Fabric profile ${profile.id} inherits ${profile.inheritsFrom}, main ${profile.mainClass}`,
+  );
+
+  await writeProfile(rootDir, profile);
+  try {
+    // The vanilla half plus Legacy Fabric's intermediary and loader libraries.
+    await prepare(profile.id, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, profile.id);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 3, total: 3, label: 'Legacy Fabric installed' });
+  return {
+    versionId: profile.id,
+    kind: 'legacyfabric',
+    gameVersion,
+    loaderVersion: loader.loader.version,
+  };
 }
 
 async function runInstaller(
@@ -278,5 +338,6 @@ export async function installLoader(
   const resolved = await pickGameVersion(gameVersion, rootDir);
   if (kind === 'fabric') return installFabric(resolved, rootDir, progress, log);
   if (kind === 'forge') return installForge(resolved, rootDir, progress, log);
-  return installQuilt(resolved, rootDir, progress, log);
+  if (kind === 'quilt') return installQuilt(resolved, rootDir, progress, log);
+  return installLegacyFabric(resolved, rootDir, progress, log);
 }

@@ -10,10 +10,16 @@ const USER_AGENT = 'prime-client/0.1 (Minecraft launcher; mod picker)';
 const MODRINTH = 'https://api.modrinth.com/v2';
 const CURSEFORGE = 'https://api.curseforge.com/v1';
 
-const CF_LOADER: Partial<Record<InstanceLoader, number>> = { forge: 1, fabric: 4, quilt: 4 };
+const CF_LOADER: Partial<Record<InstanceLoader, number>> = {
+  forge: 1,
+  fabric: 4,
+  quilt: 4,
+  legacyfabric: 4,
+};
 
-/** Loaders both mod platforms know by name. */
+/** Loaders both mod platforms know by name; Legacy Fabric mods are Fabric jars. */
 function modLoaderName(loader: InstanceLoader): 'fabric' | 'forge' | 'quilt' | null {
+  if (loader === 'legacyfabric') return 'fabric';
   return loader === 'fabric' || loader === 'forge' || loader === 'quilt' ? loader : null;
 }
 

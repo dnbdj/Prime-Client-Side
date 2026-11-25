@@ -1574,6 +1574,10 @@ input[type='range']::-webkit-slider-thumb {
   background-color: rgba(139, 92, 246, 0.32);
 }
 
+.loader-mark.legacyfabric {
+  background-color: rgba(0, 168, 150, 0.3);
+}
+
 .loader-mark.modpack {
   background-color: rgba(101, 64, 76, 0.7);
 }
