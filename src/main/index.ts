@@ -106,7 +106,13 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
       (event: ProgressEvent) => send('prime:progress', event),
       log,
     );
-    saveConfig({ versionId: installed.versionId });
+    saveConfig({
+      versionId: installed.versionId,
+      instances: [
+        installed.versionId,
+        ...(loadConfig().instances ?? []).filter((id) => id !== installed.versionId),
+      ],
+    });
     return { ok: true, versionId: installed.versionId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -205,7 +211,11 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
       { versionId, playedAt: new Date().toISOString() },
       ...(config.recent ?? []).filter((entry) => entry.versionId !== versionId),
     ].slice(0, 6);
-    saveConfig({ versionId, recent });
+    saveConfig({
+      versionId,
+      recent,
+      instances: [versionId, ...(config.instances ?? []).filter((id) => id !== versionId)],
+    });
 
     if (config.closeOnLaunch) {
       // Forget the handle first: before-quit only kills a session it still owns,

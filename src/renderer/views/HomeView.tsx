@@ -119,7 +119,7 @@ export function HomeView({
         <div className="card-grid">
           {recent.length === 0 ? (
             <p className="empty">
-              No instances played yet. Pick a version in Versions and press Play - it shows up here.
+              No instances played yet. Add one in Instances and press Play - it shows up here.
             </p>
           ) : (
             recent.map(({ version, playedAt }) => (

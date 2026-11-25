@@ -8,20 +8,20 @@ import type {
 } from '../shared/api';
 import { HomeIcon, MoreIcon, SearchIcon, SettingsIcon, VersionsIcon } from './components/Icon';
 import { HomeView } from './views/HomeView';
+import { InstancesView, type InstanceCard } from './views/InstancesView';
 import { SettingsView } from './views/SettingsView';
-import { VersionsView } from './views/VersionsView';
 
-type View = 'home' | 'versions' | 'settings';
+type View = 'home' | 'instances' | 'settings';
 
 const NAV = [
   { id: 'home' as const, label: 'Home', Icon: HomeIcon },
-  { id: 'versions' as const, label: 'Versions', Icon: VersionsIcon },
+  { id: 'instances' as const, label: 'Instances', Icon: VersionsIcon },
   { id: 'settings' as const, label: 'Settings', Icon: SettingsIcon },
 ];
 
 const TITLES: Record<View, { title: string; subtitle: string }> = {
   home: { title: 'Home', subtitle: 'Pick a version and drop in' },
-  versions: { title: 'Versions', subtitle: 'Every Minecraft release Prime can install' },
+  instances: { title: 'Instances', subtitle: 'Your Minecraft builds, ready to play' },
   settings: { title: 'Settings', subtitle: 'Stored locally on this machine' },
 };
 
@@ -195,6 +195,36 @@ export function App() {
     [config?.versionId, versions],
   );
 
+  const instances = useMemo<InstanceCard[]>(() => {
+    const played = new Map((config?.recent ?? []).map((entry) => [entry.versionId, entry.playedAt]));
+    const ids: string[] = [];
+    const candidates = [
+      ...(config?.instances ?? []),
+      ...(config?.recent ?? []).map((entry) => entry.versionId),
+      config?.versionId ?? '',
+    ];
+    for (const id of candidates) {
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+    return ids
+      .map((id): InstanceCard | null => {
+        const version = versions.find((candidate) => candidate.id === id);
+        return version ? { version, playedAt: played.get(id) ?? null } : null;
+      })
+      .filter((card): card is InstanceCard => card !== null);
+  }, [config?.instances, config?.recent, config?.versionId, versions]);
+
+  const addInstance = useCallback(
+    async (versionId: string) => {
+      const current = config?.instances ?? [];
+      await patchConfig({
+        instances: [versionId, ...current.filter((id) => id !== versionId)],
+        versionId,
+      });
+    },
+    [config?.instances, patchConfig],
+  );
+
   const recentInstances = useMemo(() => {
     return (config?.recent ?? [])
       .map((entry) => {
@@ -286,7 +316,7 @@ export function App() {
               placeholder="Search versions"
               onChange={(event) => {
                 setFilter(event.target.value);
-                if (event.target.value.trim().length > 0) setView('versions');
+                if (event.target.value.trim().length > 0) setView('instances');
               }}
             />
           </label>
@@ -382,14 +412,15 @@ export function App() {
               consoleRef={consoleRef}
               onSelectVersion={(id) => void patchConfig({ versionId: id })}
               onUsername={(username) => void patchConfig({ username })}
-              onBrowseAll={() => setView('versions')}
+              onBrowseAll={() => setView('instances')}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}
             />
-          ) : view === 'versions' ? (
-            <VersionsView
+          ) : view === 'instances' ? (
+            <InstancesView
               config={config}
               versions={versions}
+              instances={instances}
               selected={selected}
               progress={progress}
               percent={percent}
@@ -398,9 +429,9 @@ export function App() {
               loadingVersions={loadingVersions}
               filter={filter}
               channel={channel}
-              onFilter={setFilter}
               onChannel={setChannel}
-              onSelectVersion={(id) => void patchConfig({ versionId: id })}
+              onSelectInstance={(id) => void patchConfig({ versionId: id })}
+              onAddInstance={(id) => void addInstance(id)}
               onVersionJvmArgs={setVersionJvmArgs}
               onInstallLoader={(kind) => void handleInstallLoader(kind)}
               onReloadVersions={() => void loadVersions()}

@@ -32,6 +32,8 @@ export type PrimeConfig = {
   gameDir: string | null;
   /** Last selected version id. */
   versionId: string | null;
+  /** Instance version ids the user added, newest first. */
+  instances: string[];
   /** Instances that were actually played, newest first. */
   recent: RecentInstance[];
 };
