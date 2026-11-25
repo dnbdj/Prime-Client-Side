@@ -20,15 +20,34 @@ type Props = {
   onCreate: (entry: InstanceEntry) => void;
 };
 
-const LOADERS: { id: InstanceLoader; label: string; blurb: string; available?: boolean }[] = [
+/** Every loader the app knows about. Only Vanilla, Fabric and Forge can be set
+ * up today; the rest are listed as planned so the picker matches what launchers
+ * like Prism offer without pretending the installs exist. */
+const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[] = [
   { id: 'vanilla', label: 'Vanilla', blurb: 'The plain game with nothing loaded on top.' },
   { id: 'fabric', label: 'Fabric', blurb: 'Lightweight loader for modern mods.' },
   { id: 'forge', label: 'Forge', blurb: 'The classic loader for big modpacks.' },
+  { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.', planned: true },
+  { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for old beta versions.', planned: true },
+  { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
+  { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
+  { id: 'legacy-fabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.', planned: true },
+  { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for older versions.', planned: true },
+  {
+    id: 'modloader',
+    label: "Risugami's ModLoader",
+    blurb: 'The original 1.6-era loader.',
+    planned: true,
+  },
+  { id: 'nilloader', label: 'NilLoader', blurb: 'Minimal bytecode patching loader.', planned: true },
+  { id: 'ornithe', label: 'Ornithe', blurb: 'Fabric for old versions with legacy mappings.', planned: true },
+  { id: 'quilt', label: 'Quilt', blurb: 'Fabric-compatible loader with extra APIs.', planned: true },
+  { id: 'rift', label: 'Rift', blurb: 'Loader for 1.13-era mods.', planned: true },
   {
     id: 'modpack',
     label: 'Modpack',
     blurb: 'Modpack import is not built yet - pick Vanilla, Fabric or Forge.',
-    available: false,
+    planned: true,
   },
 ];
 
@@ -43,7 +62,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Start from the plain game, a mod loader, or a modpack.',
+    sub: 'Vanilla, Fabric and Forge work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -176,7 +195,7 @@ export function InstanceWizard({
           <>
             <div className="setup-grid">
               {LOADERS.map((option) => {
-                const unavailable = option.available === false;
+                const unavailable = option.planned === true;
                 return (
                   <button
                     key={option.id}
@@ -190,7 +209,9 @@ export function InstanceWizard({
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    onClick={() => setLoader(option.id)}
+                    onClick={() => {
+                      if (!unavailable) setLoader(option.id as InstanceLoader);
+                    }}
                   >
                     <span className={`loader-mark ${option.id}`} aria-hidden="true" />
                     <span className="setup-card-head">
@@ -205,7 +226,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Modpacks are not available yet. Mods, shaders and resource packs can be added once the instance exists.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric and Forge are the working choices today.'}
             </p>
           </>
         ) : null}
