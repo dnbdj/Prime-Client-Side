@@ -12,10 +12,28 @@ const CURSEFORGE = 'https://api.curseforge.com/v1';
 
 const CF_LOADER: Partial<Record<InstanceLoader, number>> = { forge: 1, fabric: 4 };
 
+const REQUEST_TIMEOUT_MS = 20_000;
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+
+/** fetch with a deadline, so a stalled provider cannot spin forever in the UI. */
+async function request(url: URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/abort|timed? ?out/i.test(message)) {
+      throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s contacting ${url.hostname}.`);
+    }
+    throw new Error(`Could not reach ${url.hostname}: ${message}`);
+  }
+}
+
 async function getJson<T>(url: URL, headers: Record<string, string> = {}): Promise<T> {
-  const response = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', ...headers },
-  });
+  const response = await request(
+    url,
+    { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', ...headers } },
+    REQUEST_TIMEOUT_MS,
+  );
   if (!response.ok) {
     const detail = response.status === 401 || response.status === 403 ? ' (check the API key)' : '';
     throw new Error(`${response.status} ${response.statusText} from ${url.hostname}${detail}`);
@@ -100,7 +118,11 @@ async function installModrinth(
     const download = new URL(file.url);
     if (!filename || !downloadHostAllowed('modrinth', download)) continue;
 
-    const response = await fetch(download, { headers: { 'User-Agent': USER_AGENT } });
+    const response = await request(
+      download,
+      { headers: { 'User-Agent': USER_AGENT } },
+      DOWNLOAD_TIMEOUT_MS,
+    );
     if (!response.ok) continue;
     mkdirSync(modsDir, { recursive: true });
     writeFileSync(join(modsDir, filename), Buffer.from(await response.arrayBuffer()));
@@ -176,7 +198,11 @@ async function installCurseforge(
     const download = new URL(file.downloadUrl);
     if (!downloadHostAllowed('curseforge', download)) continue;
 
-    const response = await fetch(download, { headers: { 'User-Agent': USER_AGENT } });
+    const response = await request(
+      download,
+      { headers: { 'User-Agent': USER_AGENT } },
+      DOWNLOAD_TIMEOUT_MS,
+    );
     if (!response.ok) continue;
     mkdirSync(modsDir, { recursive: true });
     writeFileSync(join(modsDir, filename), Buffer.from(await response.arrayBuffer()));
