@@ -17,11 +17,12 @@ type Props = {
   percent: number;
   busy: boolean;
   running: boolean;
+  runningId: string | null;
   loadingVersions: boolean;
   filter: string;
   onAddInstance: (entry: InstanceEntry) => void;
   onOpenInstance: (entry: InstanceEntry) => void;
-  onPlay: (versionId: string) => void;
+  onPlay: (entry: InstanceEntry) => void;
   onStop: () => void;
   onReloadVersions: () => Promise<void> | void;
 };
@@ -41,6 +42,7 @@ export function InstancesView({
   percent,
   busy,
   running,
+  runningId,
   loadingVersions,
   filter,
   onAddInstance,
@@ -120,10 +122,10 @@ export function InstancesView({
             ) : (
               cards.map(({ entry, version, playedAt }) => {
                 const active = version.id === config?.versionId;
-                const inGame = running && active;
+                const inGame = running && (runningId ? entry.id === runningId : active);
                 return (
                   <div
-                    key={`${entry.name}-${entry.versionId}`}
+                    key={entry.id}
                     className={[
                       'vcard',
                       active ? 'selected' : '',
@@ -163,7 +165,7 @@ export function InstancesView({
                           type="button"
                           className="vcard-play"
                           disabled={busy || running}
-                          onClick={() => onPlay(version.id)}
+                          onClick={() => onPlay(entry)}
                         >
                           Play
                         </button>

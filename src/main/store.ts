@@ -85,6 +85,41 @@ export function loadConfig(): PrimeConfig {
   }
 }
 
+/**
+ * Adds the fields older records do not have straight to the file. Reading goes
+ * through normalizeInstances, which already fills them in memory, so this has
+ * to look at the raw JSON to know whether a write is needed.
+ */
+export function backfillInstanceRecords(legacyDir: string): void {
+  withLock(() => {
+    let raw: { instances?: unknown };
+    try {
+      raw = JSON.parse(readFileSync(configPath(), 'utf8')) as { instances?: unknown };
+    } catch {
+      return;
+    }
+    if (!Array.isArray(raw.instances)) return;
+
+    let changed = false;
+    const instances = raw.instances.map((value) => {
+      if (!value || typeof value !== 'object') return value;
+      const record = { ...(value as Record<string, unknown>) };
+      if (typeof record.id !== 'string' || record.id.length === 0) {
+        record.id = `v:${String(record.versionId ?? '')}`;
+        changed = true;
+      }
+      if (typeof record.gameDir !== 'string' || record.gameDir.length === 0) {
+        record.gameDir = legacyDir;
+        changed = true;
+      }
+      return record;
+    });
+    if (!changed) return;
+    raw.instances = instances;
+    writeFileSync(configPath(), JSON.stringify(raw, null, 2), 'utf8');
+  });
+}
+
 export function saveConfig(patch: Partial<PrimeConfig>): PrimeConfig {
   return withLock(() => {
     const next = { ...loadConfig(), ...patch };

@@ -31,6 +31,11 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
 
 const MAX_LOG_LINES = 600;
 
+function newInstanceId(): string {
+  const random = globalThis.crypto?.randomUUID?.();
+  return random ?? `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function describeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/fetch failed|ENOTFOUND|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|network/i.test(message)) {
@@ -51,6 +56,7 @@ export function App() {
   const [logs, setLogs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runningId, setRunningId] = useState<string | null>(null);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +127,7 @@ export function App() {
     const offLog = window.prime.onLog(appendLog);
     const offExit = window.prime.onExit((code) => {
       setRunning(false);
+      setRunningId(null);
       setProgress(null);
       appendLog(
         code === 0 ? '[prime] Session closed.' : `[prime] Session ended (exit ${code ?? 'unknown'}).`,
@@ -146,7 +153,7 @@ export function App() {
   }, [logs, view]);
 
   const handleLaunch = useCallback(
-    async (versionId?: string) => {
+    async (versionId?: string, instanceId?: string) => {
       const target = versionId ?? config?.versionId;
       if (!target || busy || running) return;
       setBusy(true);
@@ -154,7 +161,7 @@ export function App() {
       setLogs([]);
       setProgress({ phase: 'meta', current: 0, total: 1, label: 'Preparing launch' });
 
-      const result = await window.prime.launch(target);
+      const result = await window.prime.launch(target, instanceId);
       setBusy(false);
 
       if (!result.ok) {
@@ -163,6 +170,7 @@ export function App() {
         return;
       }
       setRunning(true);
+      setRunningId(instanceId ?? null);
       // The main process records the launch for the Recently played list.
       await window.prime
         .getConfig()
@@ -175,6 +183,7 @@ export function App() {
   const handleStop = useCallback(async () => {
     await window.prime.kill();
     setRunning(false);
+    setRunningId(null);
     setProgress(null);
   }, []);
 
@@ -209,8 +218,8 @@ export function App() {
     const entries: InstanceEntry[] = [];
     const seen = new Set<string>();
     const push = (entry: InstanceEntry) => {
-      if (seen.has(entry.versionId)) return;
-      seen.add(entry.versionId);
+      if (seen.has(entry.id)) return;
+      seen.add(entry.id);
       entries.push(entry);
     };
 
@@ -221,11 +230,16 @@ export function App() {
 
     for (const entry of config?.instances ?? []) push(entry);
     // Played versions and the last selection are instances even when the user
-    // never went through setup for them.
+    // never went through setup for them. Versions that already have a record
+    // are covered by it, including duplicates that share a version.
+    const covered = new Set((config?.instances ?? []).map((entry) => entry.versionId));
     for (const entry of config?.recent ?? []) {
+      if (covered.has(entry.versionId)) continue;
       push(defaultInstance(entry.versionId, loaderOf(entry.versionId)));
     }
-    if (config?.versionId) push(defaultInstance(config.versionId, loaderOf(config.versionId)));
+    if (config?.versionId && !covered.has(config.versionId)) {
+      push(defaultInstance(config.versionId, loaderOf(config.versionId)));
+    }
 
     return entries
       .map((entry): InstanceCard | null => {
@@ -238,10 +252,17 @@ export function App() {
   const addInstance = useCallback(
     async (entry: InstanceEntry) => {
       const current = config?.instances ?? [];
-      // New instances get their own game folder; the main process owns the path.
+      const existing = current.find(
+        (candidate) =>
+          candidate.versionId === entry.versionId && candidate.name === entry.name,
+      );
+      // Each created instance gets its own id and therefore its own folder, even
+      // when the Minecraft version matches another instance.
+      const id = existing?.id ?? newInstanceId();
       const gameDir =
-        entry.gameDir ?? (await window.prime.instanceDir(entry.versionId).catch(() => undefined));
-      const record = gameDir ? { ...entry, gameDir } : entry;
+        existing?.gameDir ??
+        (await window.prime.instanceDir(id, entry.versionId).catch(() => undefined));
+      const record: InstanceEntry = { ...entry, id, ...(gameDir ? { gameDir } : {}) };
       const next = [
         record,
         ...current.filter(
@@ -256,14 +277,14 @@ export function App() {
 
   /** Edits that describe one instance and nothing else: name, colour. */
   const updateInstance = useCallback(
-    async (versionId: string, patch: Partial<InstanceEntry>) => {
-      const card = instances.find((candidate) => candidate.entry.versionId === versionId);
+    async (id: string, patch: Partial<InstanceEntry>) => {
+      const card = instances.find((candidate) => candidate.entry.id === id);
       if (!card) return;
       const nextEntry = { ...card.entry, ...patch };
       const current = config?.instances ?? [];
-      const exists = current.some((entry) => entry.versionId === versionId);
+      const exists = current.some((entry) => entry.id === id);
       const next = exists
-        ? current.map((entry) => (entry.versionId === versionId ? nextEntry : entry))
+        ? current.map((entry) => (entry.id === id ? nextEntry : entry))
         : [nextEntry, ...current];
       await patchConfig({ instances: next });
     },
@@ -271,7 +292,7 @@ export function App() {
   );
 
   const activeInstance = useMemo(
-    () => instances.find((card) => card.entry.versionId === instanceId) ?? null,
+    () => instances.find((card) => card.entry.id === instanceId) ?? null,
     [instanceId, instances],
   );
 
@@ -482,7 +503,12 @@ export function App() {
               entry={activeInstance.entry}
               version={activeInstance.version}
               config={config}
-              running={running && config?.versionId === activeInstance.version.id}
+              running={
+                running &&
+                (runningId
+                  ? runningId === activeInstance.entry.id
+                  : config?.versionId === activeInstance.version.id)
+              }
               busy={busy}
               progress={progress}
               percent={percent}
@@ -490,9 +516,11 @@ export function App() {
                 setInstanceId(null);
                 setView('instances');
               }}
-              onPlay={() => void handleLaunch(activeInstance.version.id)}
+              onPlay={() =>
+                void handleLaunch(activeInstance.version.id, activeInstance.entry.id)
+              }
               onStop={() => void handleStop()}
-              onEdit={(patch) => void updateInstance(activeInstance.version.id, patch)}
+              onEdit={(patch) => void updateInstance(activeInstance.entry.id, patch)}
               onJvmArgs={(value) => setVersionJvmArgs(activeInstance.version.id, value)}
               onInstallLoader={(kind) =>
                 void handleInstallLoader(kind, activeInstance.version.id)
@@ -507,14 +535,15 @@ export function App() {
               percent={percent}
               busy={busy}
               running={running}
+              runningId={runningId}
               loadingVersions={loadingVersions}
               filter={filter}
               onAddInstance={(entry) => void addInstance(entry)}
               onOpenInstance={(entry) => {
-                setInstanceId(entry.versionId);
+                setInstanceId(entry.id);
                 setView('instance');
               }}
-              onPlay={(id) => void handleLaunch(id)}
+              onPlay={(entry) => void handleLaunch(entry.versionId, entry.id)}
               onStop={() => void handleStop()}
               onReloadVersions={loadVersions}
             />

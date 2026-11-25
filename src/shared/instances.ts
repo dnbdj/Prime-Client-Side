@@ -37,6 +37,9 @@ export function defaultContent(content?: Partial<InstanceContent>): InstanceCont
  */
 export function defaultInstance(versionId: string, extra: Partial<InstanceEntry> = {}): InstanceEntry {
   return {
+    // Callers that create a second instance of the same version pass their own
+    // id; everything derived from a version id stays stable at v:<version>.
+    id: extra.id ?? `v:${versionId}`,
     versionId,
     name: extra.name?.trim() || versionId,
     color: extra.color ?? DEFAULT_INSTANCE_COLOR,

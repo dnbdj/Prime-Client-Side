@@ -24,7 +24,7 @@ import { listVersions } from './install';
 import { installLoader, type LoaderKind } from './loaders';
 import { launch, type LaunchHandle } from './launch';
 import { defaultInstance } from '../shared/instances';
-import { loadConfig, saveConfig } from './store';
+import { backfillInstanceRecords, loadConfig, saveConfig } from './store';
 import { checkForUpdates } from './update';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -152,36 +152,33 @@ function safeDirName(versionId: string): string {
   return versionId.replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '') || 'instance';
 }
 
-function instanceGameDir(versionId: string): string {
-  const entry = loadConfig().instances.find((candidate) => candidate.versionId === versionId);
+/**
+ * The folder belongs to the instance record, not to the Minecraft version, so
+ * two instances of the same version never share mods or worlds. Instance ids
+ * derived from a version (v:<version>) keep the plain version folder used by
+ * earlier builds; records created since get a suffixed folder of their own.
+ */
+function instanceGameDir(instanceId: string, versionId: string): string {
+  const entry = loadConfig().instances.find((candidate) => candidate.id === instanceId);
   if (typeof entry?.gameDir === 'string' && entry.gameDir.length > 0) return entry.gameDir;
-  // New instances live under the base folder the player chose in Settings.
-  return join(legacyGameDir(), 'instances', safeDirName(versionId));
+  const version = entry?.versionId ?? versionId;
+  const key = instanceId.startsWith('v:')
+    ? safeDirName(version)
+    : `${safeDirName(version)}-${instanceId.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`;
+  return join(legacyGameDir(), 'instances', key);
 }
 
-/** Records written before per-instance folders are pinned to the shared one. */
+/** Pins records written before per-instance folders/ids, straight to the file. */
 function migrateInstanceDirs(): void {
-  const config = loadConfig();
-  const needsPin = config.instances.some(
-    (entry) => typeof entry.gameDir !== 'string' || entry.gameDir.length === 0,
-  );
-  if (!needsPin) return;
-  const legacy = legacyGameDir();
-  saveConfig({
-    instances: config.instances.map((entry) =>
-      typeof entry.gameDir === 'string' && entry.gameDir.length > 0
-        ? entry
-        : { ...entry, gameDir: legacy },
-    ),
-  });
+  backfillInstanceRecords(legacyGameDir());
 }
 
-function modsDirectory(versionId: string): string {
-  return join(instanceGameDir(versionId), 'mods');
+function modsDirectory(instanceId: string, versionId: string): string {
+  return join(instanceGameDir(instanceId, versionId), 'mods');
 }
 
-function listModFiles(versionId: string): ModFile[] {
-  const dir = modsDirectory(versionId);
+function listModFiles(instanceId: string, versionId: string): ModFile[] {
+  const dir = modsDirectory(instanceId, versionId);
   try {
     return readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /\.(jar|zip)$/i.test(entry.name))
@@ -193,8 +190,8 @@ function listModFiles(versionId: string): ModFile[] {
 }
 
 /** Shared by the file dialog and the explicit-path entry point. */
-function copyMods(versionId: string, files: string[]): ModFile[] {
-  const dir = modsDirectory(versionId);
+function copyMods(instanceId: string, versionId: string, files: string[]): ModFile[] {
+  const dir = modsDirectory(instanceId, versionId);
   mkdirSync(dir, { recursive: true });
   for (const file of files) {
     try {
@@ -203,52 +200,70 @@ function copyMods(versionId: string, files: string[]): ModFile[] {
       // A file that vanished or is locked is skipped; the list shows what landed.
     }
   }
-  return listModFiles(versionId);
+  return listModFiles(instanceId, versionId);
 }
 
-ipcMain.handle('prime:instance:dir', (_event, versionId: string) => instanceGameDir(versionId));
+ipcMain.handle('prime:instance:dir', (_event, instanceId: string, versionId: string) =>
+  instanceGameDir(instanceId, versionId),
+);
 
-ipcMain.handle('prime:mods:list', (_event, versionId: string) => listModFiles(versionId));
+ipcMain.handle('prime:mods:list', (_event, instanceId: string, versionId: string) =>
+  listModFiles(instanceId, versionId),
+);
 
-ipcMain.handle('prime:mods:dir', (_event, versionId: string) => modsDirectory(versionId));
+ipcMain.handle('prime:mods:dir', (_event, instanceId: string, versionId: string) =>
+  modsDirectory(instanceId, versionId),
+);
 
-ipcMain.handle('prime:mods:open', async (_event, versionId: string) => {
-  const dir = modsDirectory(versionId);
+ipcMain.handle('prime:mods:open', async (_event, instanceId: string, versionId: string) => {
+  const dir = modsDirectory(instanceId, versionId);
   mkdirSync(dir, { recursive: true });
   await shell.openPath(dir);
 });
 
-ipcMain.handle('prime:mods:add', async (_event, versionId: string): Promise<ModFile[]> => {
-  const options: OpenDialogOptions = {
-    title: 'Add mods',
-    buttonLabel: 'Add to mods',
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Mod jars', extensions: ['jar', 'zip'] }],
-  };
-  const picked = window
-    ? await dialog.showOpenDialog(window, options)
-    : await dialog.showOpenDialog(options);
-  if (picked.canceled || picked.filePaths.length === 0) return listModFiles(versionId);
-  return copyMods(versionId, picked.filePaths);
-});
+ipcMain.handle(
+  'prime:mods:add',
+  async (_event, instanceId: string, versionId: string): Promise<ModFile[]> => {
+    const options: OpenDialogOptions = {
+      title: 'Add mods',
+      buttonLabel: 'Add to mods',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Mod jars', extensions: ['jar', 'zip'] }],
+    };
+    const picked = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return listModFiles(instanceId, versionId);
+    }
+    return copyMods(instanceId, versionId, picked.filePaths);
+  },
+);
 
 // Explicit-path entry point: the same copy the dialog performs, without the
 // native picker, so the add path is testable.
-ipcMain.handle('prime:mods:addFrom', (_event, versionId: string, paths: string[]): ModFile[] => {
-  if (!Array.isArray(paths)) return listModFiles(versionId);
-  return copyMods(
-    versionId,
-    paths.filter((path): path is string => typeof path === 'string' && path.length > 0),
-  );
-});
+ipcMain.handle(
+  'prime:mods:addFrom',
+  (_event, instanceId: string, versionId: string, paths: string[]): ModFile[] => {
+    if (!Array.isArray(paths)) return listModFiles(instanceId, versionId);
+    return copyMods(
+      instanceId,
+      versionId,
+      paths.filter((path): path is string => typeof path === 'string' && path.length > 0),
+    );
+  },
+);
 
-ipcMain.handle('prime:mods:remove', (_event, versionId: string, name: string): ModFile[] => {
-  if (typeof name !== 'string' || name.length === 0 || name !== basename(name)) {
-    return listModFiles(versionId);
-  }
-  rmSync(join(modsDirectory(versionId), name), { force: true });
-  return listModFiles(versionId);
-});
+ipcMain.handle(
+  'prime:mods:remove',
+  (_event, instanceId: string, versionId: string, name: string): ModFile[] => {
+    if (typeof name !== 'string' || name.length === 0 || name !== basename(name)) {
+      return listModFiles(instanceId, versionId);
+    }
+    rmSync(join(modsDirectory(instanceId, versionId), name), { force: true });
+    return listModFiles(instanceId, versionId);
+  },
+);
 
 ipcMain.handle('prime:external', async (_event, url: string) => {
   if (typeof url === 'string' && /^https:\/\//i.test(url)) await shell.openExternal(url);
@@ -276,13 +291,22 @@ ipcMain.handle('prime:auth:signout', async () => {
   await signOut();
 });
 
-ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<LaunchResult> => {
-  if (session) return { ok: false, error: 'Minecraft is already running in this window.' };
-  if (!versionId) return { ok: false, error: 'No Minecraft version selected.' };
+ipcMain.handle(
+  'prime:launch',
+  async (_event, versionId: string, instanceId?: string): Promise<LaunchResult> => {
+    if (session) return { ok: false, error: 'Minecraft is already running in this window.' };
+    if (!versionId) return { ok: false, error: 'No Minecraft version selected.' };
 
-  const config = loadConfig();
-  const rootDir = minecraftRoot();
-  const gameDir = instanceGameDir(versionId);
+    const config = loadConfig();
+    const rootDir = minecraftRoot();
+    // The instance record decides version and folder; the version id is only a
+    // fallback for launches that did not come from a card (Home's Play button).
+    const instance = instanceId
+      ? config.instances.find((entry) => entry.id === instanceId)
+      : config.instances.find((entry) => entry.versionId === versionId);
+    const launchVersion = instance?.versionId ?? versionId;
+    const launchId = instance?.id ?? `v:${launchVersion}`;
+    const gameDir = instanceGameDir(launchId, launchVersion);
 
   let auth: Awaited<ReturnType<typeof launchAuth>> = null;
   try {
@@ -293,7 +317,7 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
 
   const username = auth?.name ?? (config.username.trim() || 'Player');
   // A version-level override wins; the Settings value is the fallback.
-  const override = config.versionJvmArgs?.[versionId]?.trim();
+  const override = config.versionJvmArgs?.[launchVersion]?.trim();
   const jvmArgs = override && override.length > 0 ? override : config.jvmArgs;
 
   try {
@@ -305,14 +329,14 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     if (gameDir !== legacyGameDir() && !existsSync(instanceOptions) && existsSync(legacyOptions)) {
       copyFileSync(legacyOptions, instanceOptions);
     }
-    const logPath = startSessionLog(versionId);
+    const logPath = startSessionLog(launchVersion);
     const writeLog = (line: string) => {
       sessionLog?.write(`${line}\n`);
       send('prime:log', line);
     };
 
     session = await launch({
-      versionId,
+      versionId: launchVersion,
       rootDir,
       gameDir,
       username,
@@ -336,17 +360,21 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     writeLog(`[prime] JVM flags: ${jvmArgs.trim() || '(none)'}${override ? ' (version override)' : ' (global)'}`);
     writeLog(`[prime] After launch: ${config.afterLaunch}`);
     const recent = [
-      { versionId, playedAt: new Date().toISOString() },
-      ...(config.recent ?? []).filter((entry) => entry.versionId !== versionId),
+      { versionId: launchVersion, playedAt: new Date().toISOString() },
+      ...(config.recent ?? []).filter((entry) => entry.versionId !== launchVersion),
     ].slice(0, 6);
     saveConfig({
-      versionId,
+      versionId: launchVersion,
       recent,
-      // Keep a named instance the user made for this version; only add a plain
+      // Pin the folder on the record that actually launched; only add a plain
       // record when the version was never set up.
-      instances: config.instances.some((entry) => entry.versionId === versionId)
-        ? config.instances
-        : [defaultInstance(versionId, { gameDir }), ...config.instances],
+      instances: instance
+        ? config.instances.map((entry) =>
+            entry.id === instance.id ? { ...entry, gameDir } : entry,
+          )
+        : config.instances.some((entry) => entry.versionId === launchVersion)
+          ? config.instances
+          : [defaultInstance(launchVersion, { gameDir }), ...config.instances],
     });
 
     if (config.afterLaunch === 'close') {
@@ -366,7 +394,8 @@ ipcMain.handle('prime:launch', async (_event, versionId: string): Promise<Launch
     endSessionLog();
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-});
+  },
+);
 
 // Validate that a Java runtime is usable before the user commits to it.
 ipcMain.handle('prime:java:check', async (_event, path: string) => verifyJava(path));

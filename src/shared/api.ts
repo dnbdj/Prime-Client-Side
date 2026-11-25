@@ -20,6 +20,8 @@ export type InstanceContent = {
 
 /** A named instance on the Instances page. */
 export type InstanceEntry = {
+  /** Stable instance identity; two instances may share a Minecraft version. */
+  id: string;
   versionId: string;
   name: string;
   /** Card accent colour, hex. */
@@ -141,17 +143,17 @@ export type PrimeApi = {
   listVersions(): Promise<VersionSummary[]>;
   listJava(): Promise<JavaCandidate[]>;
   checkJava(path: string): Promise<JavaCheckResult>;
-  launch(versionId: string): Promise<LaunchResult>;
+  launch(versionId: string, instanceId?: string): Promise<LaunchResult>;
   installLoader(kind: LoaderKind, gameVersion: string): Promise<LoaderInstallResult>;
   kill(): Promise<boolean>;
-  instanceDir(versionId: string): Promise<string>;
-  listMods(versionId: string): Promise<ModFile[]>;
-  addMods(versionId: string): Promise<ModFile[]>;
+  instanceDir(instanceId: string, versionId: string): Promise<string>;
+  listMods(instanceId: string, versionId: string): Promise<ModFile[]>;
+  addMods(instanceId: string, versionId: string): Promise<ModFile[]>;
   /** Copies jars from explicit paths; the UI dialog and tests both land here. */
-  addModsFrom(versionId: string, paths: string[]): Promise<ModFile[]>;
-  removeMod(versionId: string, name: string): Promise<ModFile[]>;
-  modsDir(versionId: string): Promise<string>;
-  openMods(versionId: string): Promise<void>;
+  addModsFrom(instanceId: string, versionId: string, paths: string[]): Promise<ModFile[]>;
+  removeMod(instanceId: string, versionId: string, name: string): Promise<ModFile[]>;
+  modsDir(instanceId: string, versionId: string): Promise<string>;
+  openMods(instanceId: string, versionId: string): Promise<void>;
   openPath(path: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   defaultGameDir(): Promise<string>;

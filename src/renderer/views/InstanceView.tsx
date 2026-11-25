@@ -57,15 +57,15 @@ export function InstanceView({
   const refreshMods = useCallback(async () => {
     try {
       const [files, dir] = await Promise.all([
-        window.prime.listMods(entry.versionId),
-        window.prime.modsDir(entry.versionId),
+        window.prime.listMods(entry.id, entry.versionId),
+        window.prime.modsDir(entry.id, entry.versionId),
       ]);
       setMods(files);
       setModsDir(dir);
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     }
-  }, [entry.versionId]);
+  }, [entry.id, entry.versionId]);
 
   useEffect(() => {
     void refreshMods();
@@ -75,7 +75,7 @@ export function InstanceView({
     setModsBusy(true);
     setModsError(null);
     try {
-      setMods(await window.prime.addMods(entry.versionId));
+      setMods(await window.prime.addMods(entry.id, entry.versionId));
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -87,7 +87,7 @@ export function InstanceView({
     setModsBusy(true);
     setModsError(null);
     try {
-      setMods(await window.prime.removeMod(entry.versionId, file));
+      setMods(await window.prime.removeMod(entry.id, entry.versionId, file));
     } catch (error) {
       setModsError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -278,7 +278,7 @@ export function InstanceView({
                 type="button"
                 className="btn-ghost"
                 disabled={modsBusy}
-                onClick={() => void window.prime.openMods(entry.versionId)}
+                onClick={() => void window.prime.openMods(entry.id, entry.versionId)}
               >
                 Open folder
               </button>
