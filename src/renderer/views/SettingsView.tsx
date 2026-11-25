@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { DeviceCode, JavaCandidate, MinecraftAccount, PrimeConfig } from '../../shared/api';
+import type {
+  DeviceCode,
+  JavaCandidate,
+  MinecraftAccount,
+  PrimeConfig,
+  UpdateStatus,
+} from '../../shared/api';
 
 type Props = {
   config: PrimeConfig | null;
@@ -30,10 +36,38 @@ export function SettingsView({
   const [flow, setFlow] = useState<DeviceCode | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   useEffect(() => {
     void window.prime.defaultGameDir().then(setDefaultDir);
+    void window.prime.appVersion().then(setAppVersion).catch(() => setAppVersion(''));
   }, []);
+
+  const describeUpdate = (status: UpdateStatus): string => {
+    switch (status.status) {
+      case 'unconfigured':
+        return 'No updates configured — add a feed URL to check for a new build.';
+      case 'current':
+        return `Up to date. Feed offers ${status.version}.`;
+      case 'available':
+        return `Version ${status.version} is available.${status.notes ? ` ${status.notes}` : ''}`;
+      default:
+        return status.error;
+    }
+  };
+
+  const checkUpdates = async () => {
+    setUpdateBusy(true);
+    try {
+      setUpdateStatus(await window.prime.checkUpdates());
+    } catch (error) {
+      setUpdateStatus({ status: 'error', error: describe(error) });
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   // Poll Microsoft while a device code is on screen; stops as soon as it is spent.
   useEffect(() => {
@@ -276,6 +310,51 @@ export function SettingsView({
             {config?.closeOnLaunch ? 'Closes when the game starts' : 'Stays open in game'}
           </button>
           <p className="note">The game keeps running either way.</p>
+        </div>
+      </section>
+
+      <section className="panel wide">
+        <div className="panel-head">
+          <h2 className="panel-title">Updates</h2>
+          <span className="panel-meta">{appVersion ? `Prime ${appVersion}` : 'Prime'}</span>
+        </div>
+        <div className="panel-body">
+          <label className="field">
+            <span>Update feed URL</span>
+            <input
+              value={config?.updateFeed ?? ''}
+              spellCheck={false}
+              placeholder="https://example.com/prime/latest.json"
+              onChange={(event) => {
+                setUpdateStatus(null);
+                onPatch({ updateFeed: event.target.value.trim() || null });
+              }}
+            />
+          </label>
+          <div className="chip-row">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => void checkUpdates()}
+              disabled={updateBusy}
+            >
+              {updateBusy ? 'Checking…' : 'Check for updates'}
+            </button>
+            {updateStatus?.status === 'available' && updateStatus.url ? (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => void window.prime.openExternal(updateStatus.url ?? '')}
+              >
+                Open release page
+              </button>
+            ) : null}
+          </div>
+          <p className="note">
+            {updateStatus
+              ? describeUpdate(updateStatus)
+              : 'The feed is a small JSON file with a version, a download URL and optional notes.'}
+          </p>
         </div>
       </section>
 

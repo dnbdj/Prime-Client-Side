@@ -64,6 +64,20 @@ export function App() {
     setConfig(saved);
   }, []);
 
+  const setVersionJvmArgs = useCallback(
+    (versionId: string, value: string) => {
+      setConfig((current) => {
+        if (!current) return current;
+        const overrides = { ...current.versionJvmArgs };
+        if (value.trim().length === 0) delete overrides[versionId];
+        else overrides[versionId] = value;
+        void patchConfig({ versionJvmArgs: overrides });
+        return { ...current, versionJvmArgs: overrides };
+      });
+    },
+    [patchConfig],
+  );
+
   const loadVersions = useCallback(async () => {
     setLoadingVersions(true);
     try {
@@ -264,6 +278,7 @@ export function App() {
               onFilter={setFilter}
               onChannel={setChannel}
               onSelectVersion={(id) => void patchConfig({ versionId: id })}
+              onVersionJvmArgs={setVersionJvmArgs}
               onReloadVersions={() => void loadVersions()}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}

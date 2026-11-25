@@ -17,6 +17,7 @@ type Props = {
   onFilter: (value: string) => void;
   onChannel: (value: 'release' | 'all') => void;
   onSelectVersion: (id: string) => void;
+  onVersionJvmArgs: (versionId: string, value: string) => void;
   onReloadVersions: () => void;
   onLaunch: () => void;
   onStop: () => void;
@@ -36,6 +37,7 @@ export function VersionsView({
   onFilter,
   onChannel,
   onSelectVersion,
+  onVersionJvmArgs,
   onReloadVersions,
   onLaunch,
   onStop,
@@ -121,6 +123,21 @@ export function VersionsView({
               <dd>{config?.username || 'Player'}</dd>
             </div>
           </dl>
+
+          {selected ? (
+            <>
+              <label className="field">
+                <span>JVM flags for {selected.id}</span>
+                <input
+                  value={config?.versionJvmArgs?.[selected.id] ?? ''}
+                  spellCheck={false}
+                  placeholder={config?.jvmArgs.trim() || 'Global flags from Settings'}
+                  onChange={(event) => onVersionJvmArgs(selected.id, event.target.value)}
+                />
+              </label>
+              <p className="note">Leave empty to use the global flags from Settings.</p>
+            </>
+          ) : null}
 
           {running ? (
             <button type="button" className="btn-primary danger" onClick={onStop}>

@@ -8,10 +8,14 @@ export type PrimeConfig = {
   /** Offline-mode player name used for the ${auth_player_name} argument. */
   username: string;
   ramMb: number;
-  /** Extra JVM flags, split on whitespace and placed before the classpath. */
+  /** Global JVM flags, used when a version has no override of its own. */
   jvmArgs: string;
+  /** Per-version JVM flag overrides, keyed by Minecraft version id. */
+  versionJvmArgs: Record<string, string>;
   /** Quit the launcher once the game process has started. */
   closeOnLaunch: boolean;
+  /** JSON update feed URL, or null when updates are not configured. */
+  updateFeed: string | null;
   /** Explicit Java executable, or null to auto-detect. */
   javaPath: string | null;
   /** Override for the working directory Minecraft runs in. */
@@ -42,6 +46,8 @@ export type LaunchResult = {
   ok: boolean;
   error?: string;
   pid?: number;
+  /** Path of this session's log file. */
+  logPath?: string;
 };
 
 /** A signed-in Microsoft account that owns Minecraft: Java Edition. */
@@ -68,6 +74,12 @@ export type SignInPoll = {
   account?: MinecraftAccount;
 };
 
+export type UpdateStatus =
+  | { status: 'unconfigured' }
+  | { status: 'current'; version: string }
+  | { status: 'available'; version: string; url: string | null; notes: string | null }
+  | { status: 'error'; error: string };
+
 export type PrimeApi = {
   getConfig(): Promise<PrimeConfig>;
   setConfig(patch: Partial<PrimeConfig>): Promise<PrimeConfig>;
@@ -84,6 +96,8 @@ export type PrimeApi = {
   pollSignIn(): Promise<SignInPoll>;
   cancelSignIn(): Promise<void>;
   signOut(): Promise<void>;
+  appVersion(): Promise<string>;
+  checkUpdates(): Promise<UpdateStatus>;
   onProgress(cb: (event: ProgressEvent) => void): () => void;
   onLog(cb: (line: string) => void): () => void;
   onExit(cb: (code: number | null) => void): () => void;

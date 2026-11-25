@@ -25,7 +25,9 @@ export async function downloadFile(
   if (!res.ok || !res.body) throw new Error(`GET ${url} failed with HTTP ${res.status}`);
 
   mkdirSync(dirname(dest), { recursive: true });
-  const part = `${dest}.part`;
+  // Another launcher instance may be fetching the same file; a per-process part
+  // name keeps the two streams from writing into one file.
+  const part = `${dest}.${process.pid}.part`;
   const hash = createHash('sha1');
   const out = createWriteStream(part);
 
@@ -43,7 +45,14 @@ export async function downloadFile(
     if (expectedSha1 && expectedSha1.length === 40 && actual !== expectedSha1) {
       throw new Error(`Checksum mismatch for ${dest} (expected ${expectedSha1}, got ${actual})`);
     }
-    await fs.rename(part, dest);
+    try {
+      await fs.rename(part, dest);
+    } catch (error) {
+      // Windows refuses to replace an existing file; if the twin instance won
+      // the race the verified copy is already in place.
+      if (existsSync(dest)) await fs.rm(part, { force: true }).catch(() => undefined);
+      else throw error;
+    }
   } catch (error) {
     await fs.rm(part, { force: true }).catch(() => undefined);
     throw error;

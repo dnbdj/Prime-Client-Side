@@ -9,6 +9,7 @@ import type {
   PrimeConfig,
   ProgressEvent,
   SignInPoll,
+  UpdateStatus,
   VersionSummary,
 } from '../shared/api';
 
@@ -36,6 +37,8 @@ const api: PrimeApi = {
   pollSignIn: () => ipcRenderer.invoke('prime:auth:poll') as Promise<SignInPoll>,
   cancelSignIn: () => ipcRenderer.invoke('prime:auth:cancel') as Promise<void>,
   signOut: () => ipcRenderer.invoke('prime:auth:signout') as Promise<void>,
+  appVersion: () => ipcRenderer.invoke('prime:app:version') as Promise<string>,
+  checkUpdates: () => ipcRenderer.invoke('prime:update:check') as Promise<UpdateStatus>,
   onProgress: (cb) => subscribe<ProgressEvent>('prime:progress', cb),
   onLog: (cb) => subscribe<string>('prime:log', cb),
   onExit: (cb) => subscribe<number | null>('prime:exit', cb),

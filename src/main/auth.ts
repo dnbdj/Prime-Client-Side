@@ -1,5 +1,12 @@
 import { app } from 'electron';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DeviceCode, MinecraftAccount, SignInPoll } from '../shared/api';
 
@@ -42,9 +49,38 @@ function read(): Tokens | null {
   }
 }
 
+const TICK = new Int32Array(new SharedArrayBuffer(4));
+
+/** Serialise writes: a second launcher instance may be refreshing at the same time. */
 function write(tokens: Tokens | null): void {
-  mkdirSync(dirname(authPath()), { recursive: true });
-  writeFileSync(authPath(), tokens ? JSON.stringify(tokens, null, 2) : '{}', 'utf8');
+  const target = authPath();
+  const lock = `${target}.lock`;
+  mkdirSync(dirname(target), { recursive: true });
+  const deadline = Date.now() + 1500;
+
+  for (;;) {
+    let fd: number;
+    try {
+      fd = openSync(lock, 'wx');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (Date.now() > deadline) {
+        rmSync(lock, { force: true });
+        writeFileSync(target, tokens ? JSON.stringify(tokens, null, 2) : '{}', 'utf8');
+        return;
+      }
+      Atomics.wait(TICK, 0, 0, 25);
+      continue;
+    }
+
+    try {
+      writeFileSync(target, tokens ? JSON.stringify(tokens, null, 2) : '{}', 'utf8');
+      return;
+    } finally {
+      closeSync(fd);
+      rmSync(lock, { force: true });
+    }
+  }
 }
 
 function networkError(error: unknown): Error {
