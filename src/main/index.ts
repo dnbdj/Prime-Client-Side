@@ -90,7 +90,7 @@ ipcMain.handle('prime:config:set', (_event, patch: Partial<PrimeConfig>) => save
 
 ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 
-ipcMain.handle('prime:java:list', async () => discoverJava());
+ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:dir:default', () => minecraftRoot());
 

@@ -86,7 +86,7 @@ const MENU = /(Sound engine started|Created: \d+x\d+ .*atlas|OpenAL initialized)
   if (!result.ok) {
     console.log('launch refused:', result.error);
     stopElectron();
-    process.exit(2);
+    process.exitCode = 2;
   }
 
   const logPath = result.logPath;
@@ -96,7 +96,7 @@ const MENU = /(Sound engine started|Created: \d+x\d+ .*atlas|OpenAL initialized)
 
   for (let tick = 1; tick <= 60; tick += 1) {
     await sleep(2000);
-    const state = await evalJson('({ exit: window.__exit, count: window.__ev.length })');
+    const state = await evalJson("({ exit: (typeof window.__exit === 'undefined' ? null : window.__exit), count: (window.__ev || []).length })");
     const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : '';
     const lines = log.split(/\r?\n/);
     const hits = lines.filter((line) => MENU.test(line));
@@ -106,12 +106,12 @@ const MENU = /(Sound engine started|Created: \d+x\d+ .*atlas|OpenAL initialized)
       console.log('GAME EXITED, code=' + state.exit);
       console.log('--- SESSION LOG ---\n' + log);
       stopElectron();
-      process.exit(3);
+      process.exitCode = 3;
     }
     if (!alive) {
       console.log('GAME PROCESS GONE WITH NO EXIT EVENT\n--- SESSION LOG ---\n' + log);
       stopElectron();
-      process.exit(4);
+      process.exitCode = 4;
     }
     if (hits.length > 0) {
       menuSeen += 1;
@@ -133,14 +133,14 @@ const MENU = /(Sound engine started|Created: \d+x\d+ .*atlas|OpenAL initialized)
     killed = 'external taskkill';
     for (let i = 0; i < 10; i += 1) {
       await sleep(1000);
-      const code = await evalJson('window.__exit');
+      const code = await evalJson("(typeof window.__exit === 'undefined' ? null : window.__exit)");
       if (code !== null) { console.log('EXIT EVENT AFTER EXTERNAL KILL:', JSON.stringify(code)); break; }
     }
   } else {
     killed = await evalJson('window.prime.kill()');
     await sleep(5000);
   }
-  const exitAfter = await evalJson('window.__exit');
+  const exitAfter = await evalJson("(typeof window.__exit === 'undefined' ? null : window.__exit)");
   const aliveAfter = result.pid ? pidAlive(result.pid) : 'unknown';
   console.log('KILL:', JSON.stringify(killed), 'EXIT EVENT:', JSON.stringify(exitAfter), 'PROCESS ALIVE:', aliveAfter);
   console.log('--- LOG TAIL AFTER KILL ---\n' + fs.readFileSync(logPath, 'utf8').split(/\r?\n/).slice(-8).join('\n'));
@@ -150,9 +150,9 @@ const MENU = /(Sound engine started|Created: \d+x\d+ .*atlas|OpenAL initialized)
   if (electronOut.trim()) console.log('--- ELECTRON OUTPUT ---\n' + electronOut.trim().split(/\r?\n/).slice(-8).join('\n'));
 
   stopElectron();
-  process.exit(finished && aliveAfter === false ? 0 : 5);
+  process.exitCode = finished && aliveAfter === false ? 0 : 5;
 })().catch((error) => {
   console.error('VERIFIER ERROR', error);
   stopElectron();
-  process.exit(9);
+  process.exitCode = 9;
 });

@@ -133,7 +133,12 @@ export async function launch(options: LaunchOptions): Promise<LaunchHandle> {
 
   const requiredMajor = prepared.version.javaVersion?.majorVersion ?? 8;
   progress({ phase: 'java', current: 0, total: 1, label: `Locating Java ${requiredMajor}+` });
-  const javaPath = await resolveJava(options.javaPath, requiredMajor);
+  const javaPath = await resolveJava(options.javaPath, requiredMajor, {
+    runtimeRoot: join(options.rootDir, 'runtimes'),
+    // Old versions have no javaVersion block; vanilla runs them on Java 8.
+    component: prepared.version.javaVersion?.component ?? 'jre-legacy',
+    onProgress: (label, current, total) => progress({ phase: 'java', current, total, label }),
+  });
   progress({ phase: 'java', current: 1, total: 1, label: `Using ${javaPath}` });
 
   const command = buildCommand(prepared.version, prepared, {

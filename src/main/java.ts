@@ -4,8 +4,33 @@ import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type { JavaCandidate, JavaCheckResult } from '../shared/api';
+import { downloadFile, fetchJson, mapLimit } from './net';
 
 const JAVA_BIN = process.platform === 'win32' ? 'javaw.exe' : 'java';
+
+/** Mojang's per-platform Java runtime catalog, keyed by version component. */
+const RUNTIME_CATALOG =
+  'https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json';
+
+type RuntimeFile = {
+  type: 'file' | 'directory' | 'link';
+  downloads?: { raw?: { url: string; sha1: string; size: number } };
+  target?: string;
+};
+
+type RuntimeManifest = { files: Record<string, RuntimeFile> };
+
+type Catalog = Record<
+  string,
+  Record<string, { manifest: { url: string; sha1: string; size: number } }[]>
+>;
+
+function runtimePlatform(): string {
+  const arch = process.arch === 'ia32' ? 'x86' : process.arch === 'arm64' ? 'arm64' : 'x64';
+  if (process.platform === 'win32') return `windows-${arch}`;
+  if (process.platform === 'darwin') return `mac-os${arch === 'arm64' ? '-arm64' : ''}`;
+  return `linux${arch === 'x86' ? '-i386' : ''}`;
+}
 
 function probe(candidate: string): Promise<number | null> {
   return new Promise((resolve) => {
@@ -81,14 +106,16 @@ async function collectCandidates(): Promise<Set<string>> {
   return found;
 }
 
-export async function discoverJava(): Promise<JavaCandidate[]> {
-  const candidates = [...(await collectCandidates())].filter((path) => existsSync(path));
+export async function discoverJava(runtimeRoot?: string): Promise<JavaCandidate[]> {
+  const candidates = new Set(await collectCandidates());
+  if (runtimeRoot) await walkForJava(runtimeRoot, 4, candidates);
+  const existing = [...candidates].filter((path) => existsSync(path));
   const results: JavaCandidate[] = [];
   const seen = new Set<string>();
 
   const chunkSize = 8;
-  for (let i = 0; i < candidates.length; i += chunkSize) {
-    const chunk = candidates.slice(i, i + chunkSize);
+  for (let i = 0; i < existing.length; i += chunkSize) {
+    const chunk = existing.slice(i, i + chunkSize);
     const probed = await Promise.all(
       chunk.map(async (path) => ({ path, major: await probe(path) })),
     );
@@ -118,19 +145,92 @@ export async function verifyJava(path: string): Promise<JavaCheckResult> {
   return { ok: true, major };
 }
 
-export async function resolveJava(preferred: string | null, requiredMajor: number): Promise<string> {
+/**
+ * Downloads the Mojang runtime named by a version's `javaVersion.component` into
+ * `runtimeRoot/component` and returns its launcher executable. Restartable: files
+ * already on disk are skipped, so a half-finished fetch simply continues.
+ */
+export async function installRuntime(
+  component: string,
+  runtimeRoot: string,
+  progress?: (label: string, done: number, total: number) => void,
+): Promise<string> {
+  const platform = runtimePlatform();
+  const target = join(runtimeRoot, component);
+  const launcher = join(target, 'bin', JAVA_BIN);
+  if (existsSync(launcher)) return launcher;
+
+  progress?.(`Looking up Java runtime ${component}`, 0, 1);
+  const catalog = await fetchJson<Catalog>(RUNTIME_CATALOG);
+  const entry = catalog[platform]?.[component]?.[0]?.manifest?.url;
+  if (!entry) throw new Error(`Mojang does not publish a ${component} runtime for ${platform}.`);
+
+  const manifest = await fetchJson<RuntimeManifest>(entry);
+  const files = Object.entries(manifest.files).filter(
+    ([, file]) => file.type === 'file' && file.downloads?.raw,
+  );
+
+  let done = 0;
+  progress?.(`Downloading Java ${component}`, 0, files.length);
+  await mapLimit(files, 8, async ([relative, file]) => {
+    const dest = join(target, relative);
+    await fs.mkdir(dirname(dest), { recursive: true });
+    if (!existsSync(dest) || (file.downloads?.raw?.size && (await fs.stat(dest)).size === 0)) {
+      await downloadFile(file.downloads!.raw!.url, dest, file.downloads!.raw!.sha1);
+    }
+    done += 1;
+    if (progress && (done % 10 === 0 || done === files.length)) {
+      progress(`Java runtime ${done}/${files.length}`, done, files.length);
+    }
+  });
+
+  if (!existsSync(launcher)) {
+    throw new Error(`Downloaded ${component}, but ${launcher} is missing.`);
+  }
+  return launcher;
+}
+
+export type ResolveOptions = {
+  /** Where auto-fetched runtimes are stored, e.g. <minecraftRoot>/runtimes. */
+  runtimeRoot?: string;
+  /** Mojang runtime component name from the version json. */
+  component?: string;
+  onProgress?: (label: string, done: number, total: number) => void;
+};
+
+export async function resolveJava(
+  preferred: string | null,
+  requiredMajor: number,
+  options: ResolveOptions = {},
+): Promise<string> {
   if (preferred) {
     if (!existsSync(preferred)) throw new Error(`Configured Java not found: ${preferred}`);
     return toConsoleJava(preferred);
   }
 
-  const found = await discoverJava();
-  if (found.length === 0) {
-    throw new Error(`No Java runtime found. Install Java ${requiredMajor} and restart Prime.`);
-  }
-
+  const found = await discoverJava(options.runtimeRoot);
   const exact = found.find((c) => c.major === requiredMajor);
   if (exact) return toConsoleJava(exact.path);
+
+  // Older versions break on newer JVMs, so fetch the runtime the version asks
+  // for instead of silently using whatever happens to be installed.
+  if (options.runtimeRoot && options.component) {
+    try {
+      const fetched = await installRuntime(
+        options.component,
+        options.runtimeRoot,
+        options.onProgress,
+      );
+      const major = await probe(fetched);
+      if (major !== null && major >= requiredMajor) return toConsoleJava(fetched);
+    } catch (error) {
+      options.onProgress?.(
+        `Could not fetch Java ${requiredMajor}: ${error instanceof Error ? error.message : String(error)}`,
+        1,
+        1,
+      );
+    }
+  }
 
   const newer = found
     .filter((c) => c.major > requiredMajor)
