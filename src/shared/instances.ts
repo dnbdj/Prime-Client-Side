@@ -26,6 +26,9 @@ export const INSTANCE_LOADERS: { id: InstanceLoader; label: string }[] = [
   { id: 'bta', label: 'BTA' },
   { id: 'ornithe', label: 'Ornithe' },
   { id: 'nilloader', label: 'NilLoader' },
+  { id: 'modloader', label: 'ModLoader' },
+  { id: 'rift', label: 'Rift' },
+  { id: 'java-agent', label: 'Java Agent' },
   { id: 'modpack', label: 'Modpack' },
 ];
 

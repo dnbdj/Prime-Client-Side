@@ -199,7 +199,10 @@ export function App() {
         | 'babric'
         | 'ornithe'
         | 'nilloader'
-        | 'bta',
+        | 'bta'
+        | 'modloader'
+        | 'rift'
+        | 'java-agent',
       gameVersion?: string,
     ) => {
       const target = gameVersion ?? config?.versionId;

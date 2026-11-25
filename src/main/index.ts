@@ -119,7 +119,9 @@ ipcMain.handle('prime:bta:versions', async () => listBtaVersions());
 
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
-ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
+ipcMain.handle(
+  'prime:loader:install',
+  async (_event, kind: LoaderKind, gameVersion: string, agentJar?: string) => {
   const kinds = [
     'fabric',
     'forge',
@@ -131,11 +133,29 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
     'ornithe',
     'nilloader',
     'bta',
+    'modloader',
+    'rift',
+    'java-agent',
   ];
   if (!kinds.includes(kind)) return { ok: false, error: 'Unknown loader.' };
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
   const rootDir = minecraftRoot();
   const log = (line: string) => send('prime:log', line);
+  let agent = agentJar;
+  // A generic agent has no published artifact to fetch, so the jar comes from
+  // the user: the wizard can hand over a path, otherwise ask for one here.
+  if (kind === 'java-agent' && !agent?.trim()) {
+    const picked = await dialog.showOpenDialog({
+      title: 'Pick a JVM agent jar',
+      buttonLabel: 'Use this agent',
+      properties: ['openFile'],
+      filters: [{ name: 'Java agents', extensions: ['jar'] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { ok: false, error: 'No agent jar selected.' };
+    }
+    agent = picked.filePaths[0];
+  }
   try {
     const installed = await installLoader(
       kind,
@@ -143,6 +163,7 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
       rootDir,
       (event: ProgressEvent) => send('prime:progress', event),
       log,
+      agent,
     );
     // Only the selection changes here. Callers that create a named instance
     // (the setup wizard) add their own record once the profile exists.
@@ -153,6 +174,16 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
     send('prime:log', `[prime] ${kind} install failed: ${message}`);
     return { ok: false, error: message };
   }
+});
+
+ipcMain.handle('prime:agent:pick', async () => {
+  const picked = await dialog.showOpenDialog({
+    title: 'Pick a JVM agent jar',
+    buttonLabel: 'Use this agent',
+    properties: ['openFile'],
+    filters: [{ name: 'Java agents', extensions: ['jar'] }],
+  });
+  return picked.canceled ? null : (picked.filePaths[0] ?? null);
 });
 
 ipcMain.handle('prime:dir:default', () => minecraftRoot());
@@ -211,6 +242,24 @@ function curseForgeKey(): string | null {
   if (typeof stored === 'string' && stored.trim().length > 0) return stored.trim();
   const fromEnv = process.env.CURSEFORGE_API_KEY;
   return fromEnv && fromEnv.trim().length > 0 ? fromEnv.trim() : null;
+}
+
+/**
+ * The loader a profile was installed as lives in the profile itself, so a
+ * record created by a launch knows what it starts and the card can say so.
+ */
+function loaderOfVersion(versionId: string): InstanceLoader {
+  try {
+    const meta = JSON.parse(
+      readFileSync(join(minecraftRoot(), 'versions', versionId, `${versionId}.json`), 'utf8'),
+    ) as { primeLoader?: unknown };
+    if (typeof meta.primeLoader === 'string' && meta.primeLoader.length > 0) {
+      return meta.primeLoader as InstanceLoader;
+    }
+  } catch {
+    // Not installed locally yet: the record keeps the plain game label.
+  }
+  return 'vanilla';
 }
 
 /** Loader profiles inherit the actual Minecraft version from their parent. */
@@ -547,7 +596,13 @@ ipcMain.handle(
           )
         : config.instances.some((entry) => entry.versionId === launchVersion)
           ? config.instances
-          : [defaultInstance(launchVersion, { gameDir }), ...config.instances],
+          : [
+              defaultInstance(launchVersion, {
+                gameDir,
+                loader: loaderOfVersion(launchVersion),
+              }),
+              ...config.instances,
+            ],
     });
 
     if (config.afterLaunch === 'close') {

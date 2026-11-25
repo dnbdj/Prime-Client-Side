@@ -52,7 +52,10 @@ export type VersionJson = {
     | 'babric'
     | 'ornithe'
     | 'nilloader'
-    | 'bta';
+    | 'bta'
+    | 'modloader'
+    | 'rift'
+    | 'java-agent';
 };
 
 type Manifest = {
@@ -192,7 +195,20 @@ async function readLocalVersion(rootDir: string, versionId: string): Promise<Ver
 
 /** Installed profile first, then Mojang's manifest. */
 export async function readVersion(versionId: string, rootDir: string): Promise<VersionJson> {
-  return (await readLocalVersion(rootDir, versionId)) ?? fetchVersion(versionId);
+  const local = await readLocalVersion(rootDir, versionId);
+  if (local) return local;
+  const fetched = await fetchVersion(versionId);
+  // Keep the metadata beside its jar: a profile that inherits this version
+  // (Rift's 1.13, for one) otherwise has to reach Mojang on every launch, and
+  // fails outright on a filtered network even though every file is on disk.
+  try {
+    const dir = join(rootDir, 'versions', versionId);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(join(dir, `${versionId}.json`), JSON.stringify(fetched, null, 2));
+  } catch {
+    // A read-only root still launches with what was just fetched.
+  }
+  return fetched;
 }
 
 export type ResolvedVersion = {

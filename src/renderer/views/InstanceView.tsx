@@ -34,7 +34,10 @@ type Props = {
       | 'babric'
       | 'ornithe'
       | 'nilloader'
-      | 'bta',
+      | 'bta'
+      | 'modloader'
+      | 'rift'
+      | 'java-agent',
   ) => void;
   onDelete: () => void;
 };
@@ -334,6 +337,30 @@ export function InstanceView({
                     onClick={() => onInstallLoader('nilloader')}
                   >
                     Install NilLoader
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('modloader')}
+                  >
+                    Install ModLoader
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('rift')}
+                  >
+                    Install Rift
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('java-agent')}
+                  >
+                    Install Java Agent
                   </button>
                 </div>
                 <p className="note">Adds a {entry.versionId} loader profile as its own instance.</p>

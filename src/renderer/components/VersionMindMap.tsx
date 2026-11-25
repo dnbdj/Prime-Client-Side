@@ -220,6 +220,21 @@ export function VersionMindMap({
       {family && family.children.length > 0 ? (
         <div className="mm-col">
           <span className="mm-col-title">{family.id} builds</span>
+          {/* A family can be a version itself (1.13), and expanding it would
+              otherwise leave that version impossible to pick. */}
+          {family.versions.map((id) => (
+            <button
+              key={`base:${id}`}
+              type="button"
+              data-mm-key={`pat:${id}`}
+              data-mm-parent={`fam:${family.id}`}
+              className={leafClass(id)}
+              onClick={() => onPick(id)}
+            >
+              <span className="mm-label">{displayLabel(id)}</span>
+              <span className="mm-tag">base</span>
+            </button>
+          ))}
           {family.children.map((node) => {
             const open = node.id === minor?.id;
             const isLeaf = node.children.length === 0;

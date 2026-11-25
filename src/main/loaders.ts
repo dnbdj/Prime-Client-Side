@@ -1,6 +1,7 @@
 import { existsSync, promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
 import AdmZip from 'adm-zip';
 import type { ProgressEvent, VersionSummary } from '../shared/api';
 import { downloadFile, fetchJson } from './net';
@@ -17,7 +18,10 @@ export type LoaderKind =
   | 'babric'
   | 'ornithe'
   | 'nilloader'
-  | 'bta';
+  | 'bta'
+  | 'modloader'
+  | 'rift'
+  | 'java-agent';
 
 export type LoaderInstall = {
   versionId: string;
@@ -72,6 +76,14 @@ const ORNITHE_META = 'https://meta.ornithemc.net/v3/versions';
 const NILLOADER_RELEASES = 'https://git.sleeping.town/api/v1/repos/Nil/NilLoader/releases';
 const NILLOADER_MAVEN = 'https://repo.sleeping.town';
 const BTA_CLIENT = 'https://downloads.betterthanadventure.net/bta-client/release';
+const MODLOADER_ARCHIVE_URL =
+  'https://b2.mcarchive.net/file/mcarchive/0b14f5e261c9862989aa74313b59188cce10bea6724bae31130ce1e8e6a1c060/ModLoader%201.6.2.zip';
+const MODLOADER_SHA256 = '0b14f5e261c9862989aa74313b59188cce10bea6724bae31130ce1e8e6a1c060';
+const RIFT_VERSION = '1.0.4-87';
+const RIFT_JAR_URL = `https://github.com/DimensionalDevelopment/Rift/releases/download/v${RIFT_VERSION}/Rift-${RIFT_VERSION}.jar`;
+const RIFT_SHA1 = '3c6ad224026a4ffc7c1758ed070b0a32bb72d9d7';
+/** dimdev.org's maven is gone; the archive copy is the same published jar. */
+const RIFT_MAVEN = 'https://web.archive.org/web/2019id_/https://www.dimdev.org/maven';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -1012,16 +1024,261 @@ export async function installBta(
   return { versionId, kind: 'bta', gameVersion: 'b1.7.3', loaderVersion: version };
 }
 
+async function sha256File(path: string): Promise<string> {
+  return createHash('sha256').update(await fs.readFile(path)).digest('hex');
+}
+
+/**
+ * Risugami's ModLoader is not a launcher: it is 26 class files that go straight
+ * into the 1.6.2 client jar, most of them replacing obfuscated base classes.
+ * The install patches a copy of that jar and points the profile at the copy.
+ */
+export async function installModLoader(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  if (gameVersion !== '1.6.2') {
+    throw new Error(`Risugami's ModLoader ships for Minecraft 1.6.2, not ${gameVersion}.`);
+  }
+  const versionId = `${gameVersion}-modloader`;
+
+  progress({ phase: 'loader', current: 0, total: 5, label: 'Preparing vanilla 1.6.2' });
+  await prepare(gameVersion, rootDir, (phase, current, total, label) =>
+    progress({ phase, current, total, label }),
+  );
+  const vanillaJar = join(rootDir, 'versions', gameVersion, `${gameVersion}.jar`);
+  if (!existsSync(vanillaJar)) throw new Error('The vanilla 1.6.2 client jar is missing.');
+
+  progress({ phase: 'loader', current: 1, total: 5, label: 'Downloading ModLoader 1.6.2' });
+  const archive = join(rootDir, '.prime-cache', 'ModLoader 1.6.2.zip');
+  await fs.mkdir(dirname(archive), { recursive: true });
+  if (!existsSync(archive)) await downloadFile(MODLOADER_ARCHIVE_URL, archive);
+  const digest = await sha256File(archive);
+  if (digest !== MODLOADER_SHA256) {
+    await fs.rm(archive, { force: true }).catch(() => undefined);
+    throw new Error(`ModLoader archive checksum mismatch (expected ${MODLOADER_SHA256}, got ${digest}).`);
+  }
+
+  progress({ phase: 'loader', current: 2, total: 5, label: 'Patching the 1.6.2 client jar' });
+  const game = new AdmZip(vanillaJar);
+  const patch = new AdmZip(archive);
+  let replaced = 0;
+  let added = 0;
+  for (const entry of patch.getEntries()) {
+    if (entry.isDirectory) continue;
+    const data = entry.getData();
+    if (game.getEntry(entry.entryName)) {
+      game.updateFile(entry.entryName, data);
+      replaced += 1;
+    } else {
+      game.addFile(entry.entryName, data);
+      added += 1;
+    }
+  }
+  // A jar signed before the classes were added refuses to load them.
+  for (const entry of [...game.getEntries()]) {
+    if (/^META-INF\/(MOJANG_C|.*\.(SF|RSA|DSA|EC))$/i.test(entry.entryName)) {
+      game.deleteFile(entry.entryName);
+    }
+  }
+  log(`[prime] ModLoader patched ${gameVersion}.jar: ${replaced} classes replaced, ${added} added`);
+
+  const versionDir = join(rootDir, 'versions', versionId);
+  await fs.mkdir(versionDir, { recursive: true });
+  const patchedJar = join(versionDir, `${versionId}.jar`);
+  game.writeZip(patchedJar);
+
+  // A standalone profile: no downloads.client, so prepare keeps this patched jar
+  // instead of fetching the vanilla one again.
+  const { version: vanilla } = await resolveVersion(gameVersion, rootDir);
+  const profile: VersionJson = {
+    id: versionId,
+    type: vanilla.type ?? 'release',
+    mainClass: vanilla.mainClass,
+    assets: vanilla.assets,
+    assetIndex: vanilla.assetIndex,
+    javaVersion: vanilla.javaVersion,
+    libraries: vanilla.libraries,
+    arguments: vanilla.arguments,
+    minecraftArguments: vanilla.minecraftArguments,
+    releaseTime: vanilla.releaseTime ?? new Date().toISOString(),
+  };
+  profile.primeLoader = 'modloader';
+  await writeProfile(rootDir, profile);
+
+  progress({ phase: 'loader', current: 3, total: 5, label: 'Checking the patched client' });
+  try {
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 5, total: 5, label: 'ModLoader installed' });
+  return { versionId, kind: 'modloader', gameVersion, loaderVersion: '1.6.2' };
+}
+
+/**
+ * Rift publishes a complete launch profile inside its own jar (launchwrapper
+ * plus its tweak class), so the install adopts that and only re-points the
+ * libraries whose maven hosts are gone: the Rift jar comes from its GitHub
+ * release and the dimdev mixin fork from the Internet Archive copy.
+ */
+export async function installRift(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  if (gameVersion !== '1.13') {
+    throw new Error(`Rift ${RIFT_VERSION} ships one profile, for Minecraft 1.13 (not ${gameVersion}).`);
+  }
+
+  progress({ phase: 'loader', current: 0, total: 4, label: `Downloading Rift ${RIFT_VERSION}` });
+  const jarPath = join(rootDir, '.prime-cache', `Rift-${RIFT_VERSION}.jar`);
+  await fs.mkdir(dirname(jarPath), { recursive: true });
+  if (!existsSync(jarPath)) await downloadFile(RIFT_JAR_URL, jarPath, RIFT_SHA1);
+
+  const archive = new AdmZip(jarPath);
+  const entry = archive.getEntry('profile.json');
+  if (!entry) throw new Error('The Rift jar carries no profile.json.');
+  const published = JSON.parse(entry.getData().toString('utf8')) as VersionJson;
+  if (!published.id || published.inheritsFrom !== '1.13') {
+    throw new Error('The Rift jar published an unexpected profile.');
+  }
+  const versionId = published.id;
+
+  const riftPath = `org/dimdev/rift/${RIFT_VERSION}/rift-${RIFT_VERSION}.jar`;
+  const mixinPath = 'org/dimdev/mixin/0.7.11-SNAPSHOT/mixin-0.7.11-SNAPSHOT.jar';
+  const libraries = (published.libraries ?? []).map((library) => {
+    if (library.name === `org.dimdev:rift:${RIFT_VERSION}`) {
+      return {
+        ...library,
+        downloads: {
+          artifact: { path: riftPath, url: RIFT_JAR_URL, sha1: RIFT_SHA1, size: 142432 },
+        },
+      };
+    }
+    if (library.name === 'org.dimdev:mixin:0.7.11-SNAPSHOT') {
+      return {
+        ...library,
+        downloads: {
+          artifact: { path: mixinPath, url: `${RIFT_MAVEN}/${mixinPath}`, sha1: '', size: 0 },
+        },
+      };
+    }
+    // The published profile points at plain http maven URLs; https is the same
+    // artifact on the same host.
+    return library.url?.startsWith('http://')
+      ? { ...library, url: library.url.replace('http://', 'https://') }
+      : library;
+  });
+
+  const profile: VersionJson = {
+    ...published,
+    id: versionId,
+    libraries,
+  };
+  profile.primeLoader = 'rift';
+  log(
+    `[prime] Rift profile ${versionId}: main ${profile.mainClass}, ${libraries.length} libraries`,
+  );
+  await writeProfile(rootDir, profile);
+
+  progress({ phase: 'loader', current: 2, total: 4, label: 'Downloading Rift libraries' });
+  try {
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 4, total: 4, label: 'Rift installed' });
+  return { versionId, kind: 'rift', gameVersion, loaderVersion: RIFT_VERSION };
+}
+
+/**
+ * A Java Agent loader is just a jar the JVM runs before the game: the install
+ * copies it into the library store and starts the vanilla main class with
+ * -javaagent pointing at it, which is how NilLoader-style loaders attach.
+ */
+export async function installJavaAgent(
+  gameVersion: string,
+  agentJar: string | undefined,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  const source = (agentJar ?? '').trim();
+  if (source.length === 0) throw new Error('Pick an agent jar first.');
+  if (!existsSync(source)) throw new Error(`There is no file at ${source}.`);
+  if (!/\.jar$/i.test(source)) throw new Error('A JVM agent has to be a .jar file.');
+  const slug =
+    basename(source)
+      .replace(/\.jar$/i, '')
+      .replace(/[^a-z0-9._-]+/gi, '-')
+      .replace(/^-+|-+$/g, '') || 'agent';
+  const versionId = `agent-${slug}-${gameVersion}`;
+
+  progress({ phase: 'loader', current: 0, total: 4, label: 'Preparing vanilla files' });
+  await prepare(gameVersion, rootDir, (phase, current, total, label) =>
+    progress({ phase, current, total, label }),
+  );
+  const { version: vanilla } = await resolveVersion(gameVersion, rootDir);
+
+  const relative = `prime/agents/${slug}.jar`;
+  const dest = join(rootDir, 'libraries', relative);
+  progress({ phase: 'loader', current: 1, total: 4, label: `Copying ${basename(source)}` });
+  await fs.mkdir(dirname(dest), { recursive: true });
+  await fs.copyFile(source, dest);
+
+  const profile: VersionJson = {
+    id: versionId,
+    inheritsFrom: gameVersion,
+    type: 'release',
+    releaseTime: new Date().toISOString(),
+    mainClass: vanilla.mainClass,
+    libraries: [],
+    arguments: { jvm: [`-javaagent:\${library_directory}/${relative}`], game: [] },
+  };
+  profile.primeLoader = 'java-agent';
+  await writeProfile(rootDir, profile);
+  log(`[prime] Java Agent profile ${versionId}: -javaagent:${relative}`);
+
+  progress({ phase: 'loader', current: 2, total: 4, label: 'Checking the agent classpath' });
+  try {
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 4, total: 4, label: 'Java Agent installed' });
+  return { versionId, kind: 'java-agent', gameVersion, loaderVersion: slug };
+}
+
 export async function installLoader(
   kind: LoaderKind,
   gameVersion: string,
   rootDir: string,
   progress: Progress,
   log: Log,
+  agentJar?: string,
 ): Promise<LoaderInstall> {
   // BTA numbers its own builds, so there is no Mojang version to resolve first.
   if (kind === 'bta') return installBta(gameVersion, rootDir, progress, log);
   const resolved = await pickGameVersion(gameVersion, rootDir);
+  if (kind === 'modloader') return installModLoader(resolved, rootDir, progress, log);
+  if (kind === 'rift') return installRift(resolved, rootDir, progress, log);
+  if (kind === 'java-agent') return installJavaAgent(resolved, agentJar, rootDir, progress, log);
   if (kind === 'fabric') return installFabric(resolved, rootDir, progress, log);
   if (kind === 'forge') return installForge(resolved, rootDir, progress, log);
   if (kind === 'quilt') return installQuilt(resolved, rootDir, progress, log);

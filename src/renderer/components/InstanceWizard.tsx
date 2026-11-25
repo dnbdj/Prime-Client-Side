@@ -31,19 +31,18 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.' },
   { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for beta 1.7.3.' },
   { id: 'bta', label: 'BTA', blurb: 'Better Than Adventure, the beta 1.7.3 overhaul.' },
-  { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
+  { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.' },
   { id: 'legacyfabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.' },
   { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for 1.12.2 and older versions.' },
   {
     id: 'modloader',
     label: "Risugami's ModLoader",
     blurb: 'The original 1.6-era loader.',
-    planned: true,
   },
   { id: 'nilloader', label: 'NilLoader', blurb: 'Runtime patches applied through a JVM agent.' },
   { id: 'ornithe', label: 'Ornithe', blurb: 'Fabric for old versions with legacy mappings.' },
   { id: 'quilt', label: 'Quilt', blurb: 'Fabric-compatible loader with extra APIs.' },
-  { id: 'rift', label: 'Rift', blurb: 'Loader for 1.13-era mods.', planned: true },
+  { id: 'rift', label: 'Rift', blurb: 'Loader for 1.13-era mods.' },
   {
     id: 'modpack',
     label: 'Modpack',
@@ -63,7 +62,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe and NilLoader work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe, NilLoader, ModLoader, Rift and Java Agent work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -112,6 +111,8 @@ export function InstanceWizard({
   const installing = install.status === 'installing';
   const [btaVersions, setBtaVersions] = useState<VersionSummary[]>([]);
   const [btaLoading, setBtaLoading] = useState(false);
+  // A Java Agent install has no published artifact, so the jar is picked here.
+  const [agentJar, setAgentJar] = useState('');
 
   // BTA ships its own builds, so its list comes from BTA rather than Mojang's
   // manifest. It is fetched once, the first time the tile is picked.
@@ -158,10 +159,17 @@ export function InstanceWizard({
     loader === 'babric' ||
     loader === 'ornithe' ||
     loader === 'nilloader' ||
-    loader === 'bta';
+    loader === 'bta' ||
+    loader === 'modloader' ||
+    loader === 'rift' ||
+    loader === 'java-agent';
   const canNext =
     !installing &&
-    (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
+    (step === 1
+      ? pending !== null && (loader !== 'java-agent' || agentJar.trim().length > 0)
+      : step === 3
+        ? instanceName.length > 0
+        : true);
 
   // The working loaders are real installs, not labels: run the same installer
   // the detail panel uses and only create the instance once a profile exists.
@@ -171,7 +179,11 @@ export function InstanceWizard({
 
     if (needsInstall) {
       setInstall({ status: 'installing' });
-      const result = await window.prime.installLoader(loader as LoaderKind, pending);
+      const result = await window.prime.installLoader(
+        loader as LoaderKind,
+        pending,
+        loader === 'java-agent' ? agentJar.trim() : undefined,
+      );
       if (!result.ok || !result.versionId) {
         setInstall({
           status: 'error',
@@ -276,13 +288,37 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe and NilLoader are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, BTA, Ornithe, NilLoader, ModLoader, Rift and Java Agent are the working choices today.'}
             </p>
           </>
         ) : null}
 
         {step === 1 ? (
           <div className="setup-stepmap">
+            {loader === 'java-agent' ? (
+              <div className="setup-agent">
+                <label className="field">
+                  <span>Agent jar</span>
+                  <input
+                    value={agentJar}
+                    placeholder="C:\path\to\agent.jar"
+                    spellCheck={false}
+                    onChange={(event) => setAgentJar(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => {
+                    void window.prime.pickAgent().then((picked) => {
+                      if (picked) setAgentJar(picked);
+                    });
+                  }}
+                >
+                  Browse…
+                </button>
+              </div>
+            ) : null}
             <div className="setup-mapbar">
               <div className="chip-row" role="group" aria-label="Channel">
                 <button

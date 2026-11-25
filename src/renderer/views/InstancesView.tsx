@@ -40,6 +40,9 @@ const LOADER_LABEL: Record<InstanceEntry['loader'], string> = {
   bta: 'BTA',
   ornithe: 'Ornithe',
   nilloader: 'NilLoader',
+  modloader: 'ModLoader',
+  rift: 'Rift',
+  'java-agent': 'Java Agent',
   modpack: 'Modpack',
 };
 

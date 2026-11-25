@@ -36,8 +36,14 @@ const api: PrimeApi = {
   checkJava: (path) => ipcRenderer.invoke('prime:java:check', path) as Promise<JavaCheckResult>,
   launch: (versionId, instanceId) =>
     ipcRenderer.invoke('prime:launch', versionId, instanceId) as Promise<LaunchResult>,
-  installLoader: (kind, gameVersion) =>
-    ipcRenderer.invoke('prime:loader:install', kind, gameVersion) as Promise<LoaderInstallResult>,
+  installLoader: (kind, gameVersion, agentJar) =>
+    ipcRenderer.invoke(
+      'prime:loader:install',
+      kind,
+      gameVersion,
+      agentJar,
+    ) as Promise<LoaderInstallResult>,
+  pickAgent: () => ipcRenderer.invoke('prime:agent:pick') as Promise<string | null>,
   kill: () => ipcRenderer.invoke('prime:kill') as Promise<boolean>,
   instanceDir: (instanceId, versionId) =>
     ipcRenderer.invoke('prime:instance:dir', instanceId, versionId) as Promise<string>,

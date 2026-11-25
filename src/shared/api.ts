@@ -16,7 +16,10 @@ export type LoaderKind =
   | 'babric'
   | 'ornithe'
   | 'nilloader'
-  | 'bta';
+  | 'bta'
+  | 'modloader'
+  | 'rift'
+  | 'java-agent';
 
 /** How an instance was started: the plain game, a mod loader, or a modpack. */
 export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';
@@ -208,7 +211,14 @@ export type PrimeApi = {
   listJava(): Promise<JavaCandidate[]>;
   checkJava(path: string): Promise<JavaCheckResult>;
   launch(versionId: string, instanceId?: string): Promise<LaunchResult>;
-  installLoader(kind: LoaderKind, gameVersion: string): Promise<LoaderInstallResult>;
+  /** Java Agent installs take a local agent jar; the other loaders ignore it. */
+  installLoader(
+    kind: LoaderKind,
+    gameVersion: string,
+    agentJar?: string,
+  ): Promise<LoaderInstallResult>;
+  /** File picker for a JVM agent jar. */
+  pickAgent(): Promise<string | null>;
   kill(): Promise<boolean>;
   instanceDir(instanceId: string, versionId: string): Promise<string>;
   listMods(instanceId: string, versionId: string): Promise<ModFile[]>;
