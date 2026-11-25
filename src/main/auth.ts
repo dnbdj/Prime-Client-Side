@@ -11,11 +11,15 @@ import { dirname, join } from 'node:path';
 import type { DeviceCode, MinecraftAccount, SignInPoll } from '../shared/api';
 
 /**
- * Public client that Microsoft keeps registered for device-code samples. It is
- * the only id that still accepts this flow without an Azure registration of our
- * own, and it needs no client secret — the user approves the code in a browser.
+ * Public client used against the consumers tenant; no secret is involved, the
+ * user approves the code in a browser. The first-party sample id this used to
+ * carry (04f0c124-…) is refused now with "the application is a first party
+ * application … users are not permitted to consent", so sign-in could never
+ * finish with it. Set PRIME_MS_CLIENT_ID to your own Azure registration
+ * (personal Microsoft accounts only, public client flows enabled) to use that
+ * instead of this shared one.
  */
-const CLIENT_ID = '04f0c124-f2bc-4f59-8241-bf6df9866bbd';
+const CLIENT_ID = process.env.PRIME_MS_CLIENT_ID?.trim() || 'c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb';
 const SCOPE = 'XboxLive.signin offline_access';
 const AUTHORITY = 'https://login.microsoftonline.com/consumers/oauth2/v2.0';
 
@@ -291,10 +295,13 @@ export async function pollDeviceFlow(): Promise<SignInPoll> {
       return { status: 'pending' };
     }
     pending = null;
+    const description = payload.error_description ?? '';
     const reason =
       payload.error === 'authorization_declined'
         ? 'Sign-in was declined.'
-        : (payload.error_description ?? 'Microsoft rejected the sign-in.');
+        : /first party application|not permitted to consent/i.test(description)
+          ? 'Microsoft blocked this sign-in. Use the personal Microsoft account that owns Minecraft: Java Edition, not a work or school account, then start the sign-in again.'
+          : description || 'Microsoft rejected the sign-in.';
     return { status: 'error', error: reason };
   }
 
