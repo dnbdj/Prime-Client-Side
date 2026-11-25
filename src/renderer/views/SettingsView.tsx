@@ -75,6 +75,8 @@ export function SettingsView({
   const [watcherBusy, setWatcherBusy] = useState(false);
   const [watcherMessage, setWatcherMessage] = useState<string | null>(null);
   const [newOfflineName, setNewOfflineName] = useState('');
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addKind, setAddKind] = useState<'offline' | null>(null);
 
   useEffect(() => {
     void window.prime.defaultGameDir().then(setDefaultDir);
@@ -219,6 +221,7 @@ export function SettingsView({
       : [...accounts, { id, kind: 'offline' as const, name, uuid: null }];
     onPatch({ accounts: next, activeAccountId: id, username: name });
     setNewOfflineName('');
+    setAddKind(null);
     setAuthMessage(`Added offline account ${name}.`);
     onAccountChange(null);
   };
@@ -313,24 +316,77 @@ export function SettingsView({
               </div>
 
               <div className="account-add">
-                <label className="field">
-                  <span>New offline account</span>
-                  <input
-                    value={newOfflineName}
-                    maxLength={16}
-                    spellCheck={false}
-                    placeholder="Steve"
-                    onChange={(event) => setNewOfflineName(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  disabled={newOfflineName.trim().length === 0}
-                  onClick={() => void addOfflineAccount()}
-                >
-                  Add offline account
-                </button>
+                <div className="add-account">
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    aria-haspopup="menu"
+                    aria-expanded={addMenuOpen}
+                    onClick={() => setAddMenuOpen((open) => !open)}
+                  >
+                    Add <span aria-hidden="true">▾</span>
+                  </button>
+                  {addMenuOpen ? (
+                    <div className="account-menu add-account-menu" role="menu" aria-label="Add account">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-menu-item"
+                        onClick={() => {
+                          setAddMenuOpen(false);
+                          setAddKind('offline');
+                        }}
+                      >
+                        <span className="account-menu-title">Offline</span>
+                        <span className="account-menu-note">
+                          A local name for singleplayer and offline servers
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-menu-item"
+                        disabled={authBusy}
+                        onClick={() => {
+                          setAddMenuOpen(false);
+                          setAddKind(null);
+                          void beginSignIn();
+                        }}
+                      >
+                        <span className="account-menu-title">Online</span>
+                        <span className="account-menu-note">
+                          Sign in with Microsoft for online servers
+                        </span>
+                      </button>
+                      <button type="button" role="menuitem" className="account-menu-item" disabled>
+                        <span className="account-menu-title">Other</span>
+                        <span className="account-menu-note">Coming soon</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {addKind === 'offline' ? (
+                  <div className="add-offline-form">
+                    <label className="field">
+                      <span>New offline account</span>
+                      <input
+                        value={newOfflineName}
+                        maxLength={16}
+                        spellCheck={false}
+                        placeholder="Steve"
+                        onChange={(event) => setNewOfflineName(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={newOfflineName.trim().length === 0}
+                      onClick={() => void addOfflineAccount()}
+                    >
+                      Add offline account
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               {flow ? (
@@ -362,16 +418,6 @@ export function SettingsView({
                 </div>
               ) : (
                 <>
-                  <div className="chip-row">
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      onClick={() => void beginSignIn()}
-                      disabled={authBusy}
-                    >
-                      {authBusy ? 'Opening…' : 'Add Microsoft account'}
-                    </button>
-                  </div>
                   <p className="note">
                     Offline mode covers singleplayer and offline servers. Sign in to join online
                     servers and keep your real skin and name.

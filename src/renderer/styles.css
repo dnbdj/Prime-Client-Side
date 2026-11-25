@@ -2496,6 +2496,37 @@ input[type='range']::-webkit-slider-thumb {
   margin: 0;
 }
 
+.add-account {
+  position: relative;
+}
+
+.add-account .account-menu {
+  left: 0;
+  right: auto;
+  width: 264px;
+}
+
+.add-offline-form {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.add-offline-form .field {
+  flex: 1;
+  margin: 0;
+}
+
+.account-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.account-menu-item:disabled:hover {
+  background: none;
+}
+
 /* Update badge in the top bar and the prompt it reopens. */
 .update-badge {
   display: inline-flex;
