@@ -23,7 +23,9 @@ type Props = {
   onStop: () => void;
   onEdit: (patch: Partial<InstanceEntry>) => void;
   onJvmArgs: (value: string) => void;
-  onInstallLoader: (kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric') => void;
+  onInstallLoader: (
+    kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric' | 'liteloader',
+  ) => void;
   onDelete: () => void;
 };
 
@@ -283,6 +285,14 @@ export function InstanceView({
                   >
                     Install Legacy Fabric
                   </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => onInstallLoader('liteloader')}
+                  >
+                    Install LiteLoader
+                  </button>
                 </div>
                 <p className="note">Adds a {entry.versionId} loader profile as its own instance.</p>
               </div>
@@ -361,7 +371,7 @@ export function InstanceView({
             </p>
             <p className="note">
               Mods only do something with a loader that supports them: Fabric, Forge, NeoForge,
-              Quilt or Legacy Fabric.
+              Quilt, Legacy Fabric or LiteLoader.
             </p>
           </div>
         </section>

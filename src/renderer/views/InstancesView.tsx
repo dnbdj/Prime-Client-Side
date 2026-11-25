@@ -35,6 +35,7 @@ const LOADER_LABEL: Record<InstanceEntry['loader'], string> = {
   neoforge: 'NeoForge',
   quilt: 'Quilt',
   legacyfabric: 'Legacy Fabric',
+  liteloader: 'LiteLoader',
   modpack: 'Modpack',
 };
 

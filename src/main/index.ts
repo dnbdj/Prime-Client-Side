@@ -117,7 +117,7 @@ ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
-  const kinds = ['fabric', 'forge', 'quilt', 'legacyfabric', 'neoforge'];
+  const kinds = ['fabric', 'forge', 'quilt', 'legacyfabric', 'neoforge', 'liteloader'];
   if (!kinds.includes(kind)) return { ok: false, error: 'Unknown loader.' };
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
   const rootDir = minecraftRoot();
@@ -220,6 +220,9 @@ function gameVersionOf(versionId: string): string {
   // NeoForge builds are numbered <mc>.<mc>.<build>, e.g. neoforge-26.3.0.118.
   const neoforge = /^neoforge-(\d+\.\d+)(?:\.|$)/.exec(versionId);
   if (neoforge) return neoforge[1];
+  // LiteLoader ids look like 1.12.2-LiteLoader1.12.2.
+  const liteloader = /^(\d+\.\d+(?:\.\d+)?)-LiteLoader/.exec(versionId);
+  if (liteloader) return liteloader[1];
   return versionId;
 }
 

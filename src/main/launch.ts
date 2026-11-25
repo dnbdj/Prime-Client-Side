@@ -128,9 +128,12 @@ export function buildCommand(
     ...jvm.map(substitute),
   ];
 
-  const rawGame = version.arguments?.game
-    ? flatten(version.arguments.game, features)
-    : (version.minecraftArguments ?? '').split(' ').filter(Boolean);
+  // A profile that ships legacy `minecraftArguments` owns the whole command
+  // line - LiteLoader's tweak class only survives this way, since its parent
+  // version already has modern `arguments`.
+  const rawGame = version.minecraftArguments
+    ? version.minecraftArguments.split(' ').filter(Boolean)
+    : flatten(version.arguments?.game, features);
 
   return {
     jvm: jvmArgs,
@@ -178,7 +181,8 @@ export async function launch(options: LaunchOptions): Promise<LaunchHandle> {
   const child: ChildProcess = spawn(javaPath, [...command.jvm, command.mainClass, ...command.game], {
     cwd: options.gameDir,
     env: { ...process.env },
-    windowsHide: true,
+    // No windowsHide here: the JVM is a GUI app and LWJGL2 inherits a hidden
+    // startup show state, which leaves 1.12-era windows created but invisible.
     detached: logFd !== null,
     stdio: logFd !== null ? ['ignore', logFd, logFd] : 'pipe',
   });

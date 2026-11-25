@@ -188,7 +188,10 @@ export function App() {
   }, []);
 
   const handleInstallLoader = useCallback(
-    async (kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric', gameVersion?: string) => {
+    async (
+      kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric' | 'liteloader',
+      gameVersion?: string,
+    ) => {
       const target = gameVersion ?? config?.versionId;
       if (!target || busy) return;
       setBusy(true);

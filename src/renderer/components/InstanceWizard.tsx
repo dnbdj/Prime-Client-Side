@@ -33,7 +33,7 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
   { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
   { id: 'legacyfabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.' },
-  { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for older versions.', planned: true },
+  { id: 'liteloader', label: 'LiteLoader', blurb: 'Small loader for 1.12.2 and older versions.' },
   {
     id: 'modloader',
     label: "Risugami's ModLoader",
@@ -63,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt and Legacy Fabric work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric and LiteLoader work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -127,7 +127,8 @@ export function InstanceWizard({
     loader === 'forge' ||
     loader === 'neoforge' ||
     loader === 'quilt' ||
-    loader === 'legacyfabric';
+    loader === 'legacyfabric' ||
+    loader === 'liteloader';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
@@ -237,7 +238,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt and Legacy Fabric are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric and LiteLoader are the working choices today.'}
             </p>
           </>
         ) : null}

@@ -1,12 +1,13 @@
 import { existsSync, promises as fs } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import AdmZip from 'adm-zip';
 import type { ProgressEvent } from '../shared/api';
 import { downloadFile, fetchJson } from './net';
 import { discoverJava } from './java';
 import { prepare, resolveVersion, type VersionJson } from './install';
 
-export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge';
+export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge' | 'liteloader';
 
 export type LoaderInstall = {
   versionId: string;
@@ -54,6 +55,8 @@ const QUILT_META = 'https://meta.quiltmc.org/v3/versions';
 const LEGACY_FABRIC_META = 'https://meta.legacyfabric.net/v2/versions';
 const NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neoforge';
 const NEOFORGE_VERSIONS = 'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge';
+const LITELOADER_META = 'https://dl.liteloader.com/versions/versions.json';
+const LITELOADER_INSTALLER_JOB = 'https://jenkins.liteloader.com/job/LiteLoaderInstaller';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -228,15 +231,16 @@ export async function installLegacyFabric(
 
 type InstallerOptions = { label?: string; args?: string[] };
 
-async function runInstaller(
+/** Runs a Java process and keeps the tail of its output for error messages. */
+async function runJava(
   javaPath: string,
-  installer: string,
+  args: string[],
   cwd: string,
   log: Log,
-  { label = 'Forge', args = ['--installClient'] }: InstallerOptions = {},
+  label: string,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(javaPath, ['-jar', installer, ...args], {
+    const child = spawn(javaPath, args, {
       cwd,
       windowsHide: true,
       env: { ...process.env },
@@ -266,6 +270,16 @@ async function runInstaller(
         );
     });
   });
+}
+
+async function runInstaller(
+  javaPath: string,
+  installer: string,
+  cwd: string,
+  log: Log,
+  { label = 'Forge', args = ['--installClient'] }: InstallerOptions = {},
+): Promise<void> {
+  await runJava(javaPath, ['-jar', installer, ...args], cwd, log, label);
 }
 
 /**
@@ -444,6 +458,189 @@ export async function installNeoforge(
   return { versionId, kind: 'neoforge', gameVersion, loaderVersion: build };
 }
 
+type LiteLoaderMeta = {
+  versions: Record<
+    string,
+    { snapshots?: { 'com.mumfrey:liteloader'?: Record<string, { version?: string }> } }
+  >;
+};
+
+type LiteLoaderInstallProfile = {
+  install?: { target?: string; version?: string };
+  versionInfo?: { id?: string; inheritsFrom?: string; mainClass?: string };
+};
+
+/**
+ * LiteLoader's installer has no command line at all: its main method ignores
+ * every argument and only opens a Swing window. This driver presses the same
+ * "install client" action that window runs, against the same directory.
+ */
+const LITELOADER_DRIVER = `import java.io.File;
+import java.util.ArrayList;
+import com.mumfrey.liteloader.installer.actions.ClientInstallAction;
+import com.mumfrey.liteloader.installer.actions.InstallerAction;
+
+public class LlDriver {
+  static class Boot extends com.mumfrey.liteloader.installer.gui.InstallerPanel {
+    Boot() { super(true); }
+  }
+
+  public static void main(String[] args) throws Exception {
+    new Boot();
+    File dir = new File(args[0]).getAbsoluteFile();
+    ClientInstallAction action = new ClientInstallAction();
+    action.refresh(dir);
+    boolean ok = action.run(dir, new ArrayList<>(), InstallerAction.CLIENT);
+    System.out.println("client install result=" + ok);
+    System.exit(ok ? 0 : 1);
+  }
+}
+`;
+
+/** The installer jar carries its own profile description, so read the id from it. */
+function readLiteLoaderProfile(installerPath: string): {
+  target: string;
+  inheritsFrom: string | null;
+  mainClass: string | null;
+} {
+  let zip: AdmZip;
+  try {
+    zip = new AdmZip(installerPath);
+  } catch {
+    throw new Error('The LiteLoader installer jar could not be read.');
+  }
+  const entry = zip.getEntry('install_profile.json');
+  if (!entry) throw new Error('The LiteLoader installer is missing its install profile.');
+  const data = JSON.parse(entry.getData().toString('utf8')) as LiteLoaderInstallProfile;
+  const target = data.install?.target ?? data.versionInfo?.id;
+  if (!target) throw new Error('The LiteLoader installer does not name the profile it writes.');
+  return {
+    target,
+    inheritsFrom: data.versionInfo?.inheritsFrom ?? null,
+    mainClass: data.versionInfo?.mainClass ?? null,
+  };
+}
+
+/**
+ * LiteLoader ships a GUI-only installer per Minecraft version. The install
+ * prepares that vanilla version, runs the installer's own client-install action
+ * headlessly, then adopts the profile it wrote - the loader never changes.
+ */
+export async function installLiteLoader(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({
+    phase: 'loader',
+    current: 0,
+    total: 5,
+    label: `Looking up LiteLoader for ${gameVersion}`,
+  });
+  const meta = await fetchJson<LiteLoaderMeta>(LITELOADER_META).catch(() => null);
+  const entry = meta?.versions?.[gameVersion];
+  if (!entry) {
+    throw new Error(
+      `LiteLoader has no build for Minecraft ${gameVersion} - its last versions are 1.12.2 and older.`,
+    );
+  }
+  const loaderVersion =
+    entry.snapshots?.['com.mumfrey:liteloader']?.latest?.version ?? `${gameVersion}-SNAPSHOT`;
+  log(`[prime] LiteLoader ${loaderVersion} for ${gameVersion}`);
+
+  // The installer merges into the vanilla profile, so that has to exist first.
+  progress({ phase: 'loader', current: 1, total: 5, label: 'Preparing vanilla files' });
+  await prepare(gameVersion, rootDir, (phase, current, total, label) =>
+    progress({ phase, current, total, label }),
+  );
+
+  const profilesPath = join(rootDir, 'launcher_profiles.json');
+  if (!existsSync(profilesPath)) {
+    await fs.writeFile(profilesPath, JSON.stringify({ profiles: {} }, null, 2));
+  }
+
+  const jarName = `liteloader-installer-${gameVersion}-00-SNAPSHOT.jar`;
+  const installerUrl = `${LITELOADER_INSTALLER_JOB}%20${encodeURIComponent(
+    gameVersion,
+  )}/lastSuccessfulBuild/artifact/build/libs/${jarName}`;
+  const installerPath = join(rootDir, '.prime-cache', jarName);
+  await fs.mkdir(join(rootDir, '.prime-cache'), { recursive: true });
+
+  progress({
+    phase: 'loader',
+    current: 2,
+    total: 5,
+    label: `Downloading LiteLoader ${gameVersion} installer`,
+  });
+  if (!existsSync(installerPath)) await downloadFile(installerUrl, installerPath);
+  log(`[prime] LiteLoader installer ready (${installerPath})`);
+
+  const profileInfo = readLiteLoaderProfile(installerPath);
+  if (profileInfo.inheritsFrom && profileInfo.inheritsFrom !== gameVersion) {
+    throw new Error(
+      `This LiteLoader installer builds ${profileInfo.inheritsFrom}, not ${gameVersion}.`,
+    );
+  }
+  log(
+    `[prime] LiteLoader installer writes ${profileInfo.target} (inherits ${profileInfo.inheritsFrom}, main ${profileInfo.mainClass})`,
+  );
+
+  progress({ phase: 'loader', current: 3, total: 5, label: 'Running the LiteLoader installer' });
+  const driverDir = join(rootDir, '.prime-cache', 'liteloader-driver');
+  await fs.mkdir(driverDir, { recursive: true });
+  const driverPath = join(driverDir, 'LlDriver.java');
+  await fs.writeFile(driverPath, LITELOADER_DRIVER);
+  try {
+    // Source-file mode compiles the driver in memory with the installer jar on
+    // the classpath, so no javac call or build step is involved.
+    const runtimes = (await discoverJava()).sort((a, b) => b.major - a.major);
+    const javaPath = runtimes.find((runtime) => runtime.major >= 11)?.path ?? null;
+    if (!javaPath) {
+      throw new Error(
+        'Driving the LiteLoader installer needs a JDK 11 or newer, and none is installed.',
+      );
+    }
+    log(`[prime] LiteLoader installer Java: ${javaPath}`);
+    await runJava(
+      javaPath,
+      ['-Djava.awt.headless=true', '-cp', installerPath, driverPath, rootDir],
+      rootDir,
+      log,
+      'LiteLoader',
+    );
+  } catch (error) {
+    await discardProfile(rootDir, profileInfo.target);
+    throw error;
+  } finally {
+    await fs.rm(driverDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+
+  const versionId = profileInfo.target;
+  const profilePath = join(rootDir, 'versions', versionId, `${versionId}.json`);
+  if (!existsSync(profilePath)) {
+    await discardProfile(rootDir, versionId);
+    throw new Error('The LiteLoader installer finished but produced no client profile.');
+  }
+  const profile = JSON.parse(await fs.readFile(profilePath, 'utf8')) as VersionJson;
+  profile.primeLoader = 'liteloader';
+  await writeProfile(rootDir, profile);
+
+  progress({ phase: 'loader', current: 4, total: 5, label: 'Downloading LiteLoader libraries' });
+  try {
+    // launchwrapper, ASM and the loader jar itself into the normal store.
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 5, total: 5, label: 'LiteLoader installed' });
+  return { versionId, kind: 'liteloader', gameVersion, loaderVersion };
+}
+
 export async function installLoader(
   kind: LoaderKind,
   gameVersion: string,
@@ -456,5 +653,6 @@ export async function installLoader(
   if (kind === 'forge') return installForge(resolved, rootDir, progress, log);
   if (kind === 'quilt') return installQuilt(resolved, rootDir, progress, log);
   if (kind === 'legacyfabric') return installLegacyFabric(resolved, rootDir, progress, log);
+  if (kind === 'liteloader') return installLiteLoader(resolved, rootDir, progress, log);
   return installNeoforge(resolved, rootDir, progress, log);
 }
