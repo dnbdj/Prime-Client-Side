@@ -1,9 +1,12 @@
 import { app } from 'electron';
 import {
   closeSync,
+  copyFileSync,
+  existsSync,
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -28,6 +31,17 @@ const DEFAULTS: PrimeConfig = {
 
 function configPath(): string {
   return join(app.getPath('userData'), 'prime-config.json');
+}
+
+/**
+ * Writes through a temp file so a crash or a shutdown mid-save can never leave
+ * a half-written config: the old file stays valid until the rename replaces it.
+ */
+function writeConfigFile(text: string): void {
+  const target = configPath();
+  const temp = `${target}.tmp`;
+  writeFileSync(temp, text, 'utf8');
+  renameSync(temp, target);
 }
 
 const TICK = new Int32Array(new SharedArrayBuffer(4));
@@ -66,10 +80,10 @@ function withLock<T>(fn: () => T): T {
   }
 }
 
-/** Read fresh from disk: another instance may have written since the last call. */
-export function loadConfig(): PrimeConfig {
+/** Reads one config file; null when it is missing or not valid JSON. */
+function readConfigFile(path: string): PrimeConfig | null {
   try {
-    const parsed = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<PrimeConfig> & {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<PrimeConfig> & {
       /** Older configs had a single boolean instead of afterLaunch. */
       closeOnLaunch?: boolean;
     };
@@ -82,8 +96,28 @@ export function loadConfig(): PrimeConfig {
     // Older configs stored a plain list of version ids for instances.
     return { ...merged, instances: normalizeInstances(merged.instances) };
   } catch {
-    return { ...DEFAULTS };
+    return null;
   }
+}
+
+/** Read fresh from disk: another instance may have written since the last call. */
+export function loadConfig(): PrimeConfig {
+  const config = readConfigFile(configPath());
+  if (config) return config;
+
+  // A config that cannot be parsed used to fall back to the defaults, and the
+  // next save then wrote that empty config over the real one, losing every
+  // instance. Prefer the copy saved before the last write instead.
+  const backup = readConfigFile(`${configPath()}.bak`);
+  if (backup) {
+    try {
+      writeConfigFile(JSON.stringify(backup, null, 2));
+    } catch {
+      // The next save retries; the backup is still there to read.
+    }
+    return backup;
+  }
+  return { ...DEFAULTS };
 }
 
 /**
@@ -117,14 +151,19 @@ export function backfillInstanceRecords(legacyDir: string): void {
     });
     if (!changed) return;
     raw.instances = instances;
-    writeFileSync(configPath(), JSON.stringify(raw, null, 2), 'utf8');
+    writeConfigFile(JSON.stringify(raw, null, 2));
   });
 }
 
 export function saveConfig(patch: Partial<PrimeConfig>): PrimeConfig {
   return withLock(() => {
     const next = { ...loadConfig(), ...patch };
-    writeFileSync(configPath(), JSON.stringify(next, null, 2), 'utf8');
+    try {
+      if (existsSync(configPath())) copyFileSync(configPath(), `${configPath()}.bak`);
+    } catch {
+      // A missing backup only costs the recovery path, never the save itself.
+    }
+    writeConfigFile(JSON.stringify(next, null, 2));
     return next;
   });
 }
