@@ -23,7 +23,7 @@ type Props = {
   onStop: () => void;
   onEdit: (patch: Partial<InstanceEntry>) => void;
   onJvmArgs: (value: string) => void;
-  onInstallLoader: (kind: 'fabric' | 'forge' | 'quilt' | 'legacyfabric') => void;
+  onInstallLoader: (kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric') => void;
   onDelete: () => void;
 };
 
@@ -263,6 +263,14 @@ export function InstanceView({
                     type="button"
                     className="btn-ghost"
                     disabled={busy}
+                    onClick={() => onInstallLoader('neoforge')}
+                  >
+                    Install NeoForge
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
                     onClick={() => onInstallLoader('quilt')}
                   >
                     Install Quilt
@@ -352,8 +360,8 @@ export function InstanceView({
                 : "Mods are read from this instance's own game folder."}
             </p>
             <p className="note">
-              Mods only do something with a loader that supports them: Fabric, Forge, Quilt or
-              Legacy Fabric.
+              Mods only do something with a loader that supports them: Fabric, Forge, NeoForge,
+              Quilt or Legacy Fabric.
             </p>
           </div>
         </section>

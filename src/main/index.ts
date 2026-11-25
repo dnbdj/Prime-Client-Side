@@ -117,9 +117,8 @@ ipcMain.handle('prime:versions', async () => listVersions(minecraftRoot()));
 ipcMain.handle('prime:java:list', async () => discoverJava(join(minecraftRoot(), 'runtimes')));
 
 ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVersion: string) => {
-  if (kind !== 'fabric' && kind !== 'forge' && kind !== 'quilt' && kind !== 'legacyfabric') {
-    return { ok: false, error: 'Unknown loader.' };
-  }
+  const kinds = ['fabric', 'forge', 'quilt', 'legacyfabric', 'neoforge'];
+  if (!kinds.includes(kind)) return { ok: false, error: 'Unknown loader.' };
   if (!gameVersion) return { ok: false, error: 'Pick a Minecraft version first.' };
   const rootDir = minecraftRoot();
   const log = (line: string) => send('prime:log', line);
@@ -218,6 +217,9 @@ function gameVersionOf(versionId: string): string {
   if (fabric) return fabric[1];
   const quilt = /^quilt-loader-[\d.]+-(.+)$/.exec(versionId);
   if (quilt) return quilt[1];
+  // NeoForge builds are numbered <mc>.<mc>.<build>, e.g. neoforge-26.3.0.118.
+  const neoforge = /^neoforge-(\d+\.\d+)(?:\.|$)/.exec(versionId);
+  if (neoforge) return neoforge[1];
   return versionId;
 }
 

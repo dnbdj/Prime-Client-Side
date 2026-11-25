@@ -6,7 +6,7 @@ export type VersionSummary = {
   loader?: LoaderKind;
 };
 
-export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric';
+export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge';
 
 /** How an instance was started: the plain game, a mod loader, or a modpack. */
 export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';

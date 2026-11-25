@@ -15,12 +15,15 @@ const CF_LOADER: Partial<Record<InstanceLoader, number>> = {
   fabric: 4,
   quilt: 4,
   legacyfabric: 4,
+  neoforge: 6,
 };
 
 /** Loaders both mod platforms know by name; Legacy Fabric mods are Fabric jars. */
-function modLoaderName(loader: InstanceLoader): 'fabric' | 'forge' | 'quilt' | null {
+function modLoaderName(loader: InstanceLoader): 'fabric' | 'forge' | 'quilt' | 'neoforge' | null {
   if (loader === 'legacyfabric') return 'fabric';
-  return loader === 'fabric' || loader === 'forge' || loader === 'quilt' ? loader : null;
+  return loader === 'fabric' || loader === 'forge' || loader === 'quilt' || loader === 'neoforge'
+    ? loader
+    : null;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;

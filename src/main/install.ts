@@ -40,7 +40,7 @@ export type VersionJson = {
   inheritsFrom?: string;
   releaseTime?: string;
   /** Set on profiles Prime installed itself. */
-  primeLoader?: 'fabric' | 'forge' | 'quilt' | 'legacyfabric';
+  primeLoader?: 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge';
 };
 
 type Manifest = {

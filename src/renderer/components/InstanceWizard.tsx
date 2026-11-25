@@ -28,7 +28,7 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'vanilla', label: 'Vanilla', blurb: 'The plain game with nothing loaded on top.' },
   { id: 'fabric', label: 'Fabric', blurb: 'Lightweight loader for modern mods.' },
   { id: 'forge', label: 'Forge', blurb: 'The classic loader for big modpacks.' },
-  { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.', planned: true },
+  { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.' },
   { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for old beta versions.', planned: true },
   { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
   { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
@@ -63,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge, Quilt and Legacy Fabric work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt and Legacy Fabric work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -123,7 +123,11 @@ export function InstanceWizard({
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
   const needsInstall =
-    loader === 'fabric' || loader === 'forge' || loader === 'quilt' || loader === 'legacyfabric';
+    loader === 'fabric' ||
+    loader === 'forge' ||
+    loader === 'neoforge' ||
+    loader === 'quilt' ||
+    loader === 'legacyfabric';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
@@ -233,7 +237,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, Quilt and Legacy Fabric are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt and Legacy Fabric are the working choices today.'}
             </p>
           </>
         ) : null}
