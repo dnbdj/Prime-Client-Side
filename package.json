@@ -1,6 +1,6 @@
 {
   "name": "prime-client",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "private": true,
   "description": "Prime (client side) - a fast, no-nonsense Minecraft Java launcher",
   "repository": {
