@@ -3,6 +3,7 @@ import type {
   InstanceContent,
   InstanceEntry,
   InstanceLoader,
+  ProgressEvent,
   VersionSummary,
 } from '../../shared/api';
 import { defaultInstance, INSTANCE_COLORS } from '../../shared/instances';
@@ -12,15 +13,23 @@ type Props = {
   versions: VersionSummary[];
   filter: string;
   loadingVersions: boolean;
+  progress: ProgressEvent | null;
+  percent: number;
+  onReloadVersions: () => Promise<void> | void;
   onCancel: () => void;
   onCreate: (entry: InstanceEntry) => void;
 };
 
-const LOADERS: { id: InstanceLoader; label: string; blurb: string }[] = [
+const LOADERS: { id: InstanceLoader; label: string; blurb: string; available?: boolean }[] = [
   { id: 'vanilla', label: 'Vanilla', blurb: 'The plain game with nothing loaded on top.' },
   { id: 'fabric', label: 'Fabric', blurb: 'Lightweight loader for modern mods.' },
   { id: 'forge', label: 'Forge', blurb: 'The classic loader for big modpacks.' },
-  { id: 'modpack', label: 'Modpack', blurb: 'Start from a pack and drop its files in later.' },
+  {
+    id: 'modpack',
+    label: 'Modpack',
+    blurb: 'Modpack import is not built yet - pick Vanilla, Fabric or Forge.',
+    available: false,
+  },
 ];
 
 const LATER = [
@@ -54,7 +63,16 @@ const COPY = [
   },
 ];
 
-export function InstanceWizard({ versions, filter, loadingVersions, onCancel, onCreate }: Props) {
+export function InstanceWizard({
+  versions,
+  filter,
+  loadingVersions,
+  progress,
+  percent,
+  onReloadVersions,
+  onCancel,
+  onCreate,
+}: Props) {
   const [step, setStep] = useState(0);
   const [furthest, setFurthest] = useState(0);
   const [loader, setLoader] = useState<InstanceLoader>('vanilla');
@@ -68,6 +86,10 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
     mods: false,
     primeMod: false,
   });
+  const [install, setInstall] = useState<
+    { status: 'idle' } | { status: 'installing' } | { status: 'error'; error: string }
+  >({ status: 'idle' });
+  const installing = install.status === 'installing';
 
   const options = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -80,12 +102,42 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
 
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
-  const canNext = step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true;
+  const needsInstall = loader === 'fabric' || loader === 'forge';
+  const canNext =
+    !installing &&
+    (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
+
+  // Fabric and Forge are real installs, not labels: run the same installer the
+  // detail panel uses and only create the instance once a profile exists.
+  const finish = async () => {
+    if (!pending || installing) return;
+    setInstall({ status: 'idle' });
+
+    if (needsInstall) {
+      setInstall({ status: 'installing' });
+      const result = await window.prime.installLoader(loader as 'fabric' | 'forge', pending);
+      if (!result.ok || !result.versionId) {
+        setInstall({
+          status: 'error',
+          error: result.error ?? `${loaderLabel} did not produce a playable profile.`,
+        });
+        return;
+      }
+      // The new loader profile has to be in the version list before the card
+      // can resolve it, so refresh first and then create the instance.
+      await onReloadVersions();
+      onCreate(
+        defaultInstance(result.versionId, { loader, name: instanceName, color, content }),
+      );
+      return;
+    }
+
+    onCreate(defaultInstance(pending, { loader, name: instanceName, color, content }));
+  };
 
   const advance = () => {
     if (step === STEPS.length - 1) {
-      if (!pending) return;
-      onCreate(defaultInstance(pending, { loader, name: instanceName, color, content }));
+      void finish();
       return;
     }
     const nextStep = Math.min(STEPS.length - 1, step + 1);
@@ -113,7 +165,7 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
             <span className="chip subtle">{loaderLabel}</span>
             {pending ? <span className="chip subtle">{pending}</span> : null}
           </div>
-          <button type="button" className="btn-ghost" onClick={onCancel}>
+          <button type="button" className="btn-ghost" disabled={installing} onClick={onCancel}>
             Cancel
           </button>
         </div>
@@ -121,21 +173,41 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
 
       <div className={step === 1 ? 'setup-body map' : 'setup-body'}>
         {step === 0 ? (
-          <div className="setup-grid">
-            {LOADERS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                aria-pressed={loader === option.id}
-                className={loader === option.id ? 'setup-card on' : 'setup-card'}
-                onClick={() => setLoader(option.id)}
-              >
-                <span className={`loader-mark ${option.id}`} aria-hidden="true" />
-                <span className="setup-card-title">{option.label}</span>
-                <span className="setup-card-blurb">{option.blurb}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="setup-grid">
+              {LOADERS.map((option) => {
+                const unavailable = option.available === false;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={loader === option.id}
+                    disabled={unavailable}
+                    className={[
+                      'setup-card',
+                      loader === option.id ? 'on' : '',
+                      unavailable ? 'unavailable' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => setLoader(option.id)}
+                  >
+                    <span className={`loader-mark ${option.id}`} aria-hidden="true" />
+                    <span className="setup-card-head">
+                      <span className="setup-card-title">{option.label}</span>
+                      {unavailable ? <span className="chip soon">Not yet</span> : null}
+                    </span>
+                    <span className="setup-card-blurb">{option.blurb}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="note setup-note">
+              {needsInstall
+                ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
+                : 'Modpacks are not available yet. Mods, shaders and resource packs can be added once the instance exists.'}
+            </p>
+          </>
         ) : null}
 
         {step === 1 ? (
@@ -294,11 +366,36 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
         ) : null}
       </div>
 
+      {install.status !== 'idle' ? (
+        <div
+          className={install.status === 'error' ? 'setup-status error' : 'setup-status'}
+          role={install.status === 'error' ? 'alert' : 'status'}
+        >
+          <span className="setup-status-text">
+            {install.status === 'error'
+              ? `${loaderLabel} install failed: ${install.error}`
+              : (progress?.label ?? `Installing ${loaderLabel} for ${pending ?? 'this version'}`)}
+          </span>
+          {install.status === 'error' ? (
+            <button type="button" className="btn-ghost" onClick={() => void finish()}>
+              Try again
+            </button>
+          ) : (
+            <span className="setup-status-percent">{percent}%</span>
+          )}
+          {install.status === 'installing' ? (
+            <div className="progress-track setup-status-track">
+              <div className="progress-fill" style={{ width: `${percent}%` }} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <footer className="setup-foot">
         <button
           type="button"
           className="btn-ghost"
-          disabled={step === 0}
+          disabled={step === 0 || installing}
           onClick={() => setStep(Math.max(0, step - 1))}
         >
           Back
@@ -312,7 +409,7 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
               aria-label={label}
               aria-selected={index === step}
               aria-current={index === step ? 'step' : undefined}
-              disabled={index > furthest}
+              disabled={index > furthest || installing}
               className={
                 index === step ? 'setup-dot on' : index < step ? 'setup-dot done' : 'setup-dot'
               }
@@ -321,7 +418,13 @@ export function InstanceWizard({ versions, filter, loadingVersions, onCancel, on
           ))}
         </div>
         <button type="button" className="btn-primary small" disabled={!canNext} onClick={advance}>
-          {step === STEPS.length - 1 ? 'Create instance' : 'Next'}
+          {installing
+            ? `Installing ${loaderLabel}…`
+            : step === STEPS.length - 1
+              ? needsInstall
+                ? `Install ${loaderLabel} and create`
+                : 'Create instance'
+              : 'Next'}
         </button>
       </footer>
     </section>

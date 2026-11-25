@@ -107,13 +107,9 @@ ipcMain.handle('prime:loader:install', async (_event, kind: LoaderKind, gameVers
       (event: ProgressEvent) => send('prime:progress', event),
       log,
     );
-    const previous = loadConfig();
-    saveConfig({
-      versionId: installed.versionId,
-      instances: previous.instances.some((entry) => entry.versionId === installed.versionId)
-        ? previous.instances
-        : [defaultInstance(installed.versionId, { loader: kind }), ...previous.instances],
-    });
+    // Only the selection changes here. Callers that create a named instance
+    // (the setup wizard) add their own record once the profile exists.
+    saveConfig({ versionId: installed.versionId });
     return { ok: true, versionId: installed.versionId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

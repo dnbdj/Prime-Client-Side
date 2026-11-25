@@ -449,7 +449,7 @@ export function App() {
               onAddInstance={(entry) => void addInstance(entry)}
               onVersionJvmArgs={setVersionJvmArgs}
               onInstallLoader={(kind) => void handleInstallLoader(kind)}
-              onReloadVersions={() => void loadVersions()}
+              onReloadVersions={loadVersions}
               onLaunch={() => void handleLaunch()}
               onStop={() => void handleStop()}
             />

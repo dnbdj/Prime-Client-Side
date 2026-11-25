@@ -29,7 +29,7 @@ type Props = {
   onAddInstance: (entry: InstanceEntry) => void;
   onVersionJvmArgs: (versionId: string, value: string) => void;
   onInstallLoader: (kind: 'fabric' | 'forge') => void;
-  onReloadVersions: () => void;
+  onReloadVersions: () => Promise<void> | void;
   onLaunch: () => void;
   onStop: () => void;
 };
@@ -89,6 +89,9 @@ export function InstancesView({
         versions={versions}
         filter={filter}
         loadingVersions={loadingVersions}
+        progress={progress}
+        percent={percent}
+        onReloadVersions={onReloadVersions}
         onCancel={() => setCreating(false)}
         onCreate={(entry) => {
           onAddInstance(entry);
@@ -106,7 +109,7 @@ export function InstancesView({
             {instances.length} instance{instances.length === 1 ? '' : 's'}
           </span>
           <span className="muted">{running ? 'In game' : 'Ready to play'}</span>
-          <button type="button" className="btn-ghost" onClick={onReloadVersions}>
+          <button type="button" className="btn-ghost" onClick={() => void onReloadVersions()}>
             Reload
           </button>
           <button type="button" className="btn-primary small" onClick={() => setCreating(true)}>
