@@ -58,7 +58,19 @@ run(npm, ['version', nextVersion, '--no-git-tag-version', '--allow-same-version'
 run('git', ['add', 'package.json', 'package-lock.json']);
 run('git', ['commit', '-m', `Release ${tag}: Prime ${label}`]);
 run('git', ['tag', '-a', tag, '-m', `Prime ${label}`]);
-run('git', ['push', 'origin', 'HEAD:main']);
+
+// The post-commit hook may already be publishing this branch; pushing in
+// parallel races on the same ref. Wait for it, then push only if it did not.
+const head = capture('git', ['rev-parse', 'HEAD']);
+const remoteHead = () =>
+  capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] ?? '';
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+let published = false;
+for (let attempt = 0; attempt < 12 && !published; attempt += 1) {
+  published = remoteHead() === head;
+  if (!published) sleep(500);
+}
+if (!published) run('git', ['push', 'origin', 'HEAD:main']);
 run('git', ['push', 'origin', tag]);
 
 const notes = [
