@@ -189,7 +189,16 @@ export function App() {
 
   const handleInstallLoader = useCallback(
     async (
-      kind: 'fabric' | 'forge' | 'neoforge' | 'quilt' | 'legacyfabric' | 'liteloader',
+      kind:
+        | 'fabric'
+        | 'forge'
+        | 'neoforge'
+        | 'quilt'
+        | 'legacyfabric'
+        | 'liteloader'
+        | 'babric'
+        | 'ornithe'
+        | 'nilloader',
       gameVersion?: string,
     ) => {
       const target = gameVersion ?? config?.versionId;

@@ -22,6 +22,9 @@ export const INSTANCE_LOADERS: { id: InstanceLoader; label: string }[] = [
   { id: 'quilt', label: 'Quilt' },
   { id: 'legacyfabric', label: 'Legacy Fabric' },
   { id: 'liteloader', label: 'LiteLoader' },
+  { id: 'babric', label: 'Babric' },
+  { id: 'ornithe', label: 'Ornithe' },
+  { id: 'nilloader', label: 'NilLoader' },
   { id: 'modpack', label: 'Modpack' },
 ];
 

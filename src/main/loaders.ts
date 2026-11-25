@@ -7,7 +7,16 @@ import { downloadFile, fetchJson } from './net';
 import { discoverJava } from './java';
 import { prepare, resolveVersion, type VersionJson } from './install';
 
-export type LoaderKind = 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge' | 'liteloader';
+export type LoaderKind =
+  | 'fabric'
+  | 'forge'
+  | 'quilt'
+  | 'legacyfabric'
+  | 'neoforge'
+  | 'liteloader'
+  | 'babric'
+  | 'ornithe'
+  | 'nilloader';
 
 export type LoaderInstall = {
   versionId: string;
@@ -57,6 +66,10 @@ const NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neofo
 const NEOFORGE_VERSIONS = 'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge';
 const LITELOADER_META = 'https://dl.liteloader.com/versions/versions.json';
 const LITELOADER_INSTALLER_JOB = 'https://jenkins.liteloader.com/job/LiteLoaderInstaller';
+const BABRIC_META = 'https://meta.babric.glass-launcher.net/v2/versions';
+const ORNITHE_META = 'https://meta.ornithemc.net/v3/versions';
+const NILLOADER_RELEASES = 'https://git.sleeping.town/api/v1/repos/Nil/NilLoader/releases';
+const NILLOADER_MAVEN = 'https://repo.sleeping.town';
 const FORGE_PROMOTIONS = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json';
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 
@@ -641,6 +654,231 @@ export async function installLiteLoader(
   return { versionId, kind: 'liteloader', gameVersion, loaderVersion };
 }
 
+/**
+ * Babric is Fabric for beta 1.7.3 and serves the same Fabric-shaped profile
+ * from its own meta, so the install is Fabric's against Babric's endpoints.
+ */
+export async function installBabric(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({ phase: 'loader', current: 0, total: 3, label: `Looking up Babric for ${gameVersion}` });
+  const loaders = await fetchJson<FabricLoader[]>(
+    `${BABRIC_META}/loader/${encodeURIComponent(gameVersion)}`,
+  );
+  if (!Array.isArray(loaders) || loaders.length === 0) {
+    throw new Error(`Babric has no loader build for Minecraft ${gameVersion}.`);
+  }
+  const loader = loaders.find((entry) => entry.loader.stable) ?? loaders[0];
+  log(`[prime] Babric loader ${loader.loader.version} for ${gameVersion}`);
+
+  progress({ phase: 'loader', current: 1, total: 3, label: 'Fetching Babric profile' });
+  const profile = await fetchJson<VersionJson>(
+    `${BABRIC_META}/loader/${encodeURIComponent(gameVersion)}/${encodeURIComponent(
+      loader.loader.version,
+    )}/profile/json`,
+  );
+  if (!profile.id || profile.inheritsFrom !== gameVersion) {
+    throw new Error(`Babric returned an unexpected profile for ${gameVersion}.`);
+  }
+  profile.primeLoader = 'babric';
+  profile.releaseTime = profile.releaseTime ?? new Date().toISOString();
+  // Beta 1.7.3 bundles asm-all 4.1 and Fabric's loader refuses to start with a
+  // second ASM on the classpath, so the game's copy is dropped.
+  const vanilla = await resolveVersion(gameVersion, rootDir).catch(() => null);
+  const vanillaAsm = (vanilla?.version.libraries ?? [])
+    .map((library) => library.name)
+    .filter((name) => name.startsWith('org.ow2.asm:'));
+  if (vanillaAsm.length > 0) {
+    profile.primeDropLibraries = vanillaAsm;
+    log(`[prime] Babric drops the game's ${vanillaAsm.join(', ')}`);
+  }
+  log(`[prime] Babric profile ${profile.id} inherits ${profile.inheritsFrom}, main ${profile.mainClass}`);
+
+  await writeProfile(rootDir, profile);
+  try {
+    // The beta client jar, pre-1.6 assets and Babric's own libraries.
+    await prepare(profile.id, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, profile.id);
+    throw error;
+  }
+
+  progress({ phase: 'loader', current: 3, total: 3, label: 'Babric installed' });
+  return { versionId: profile.id, kind: 'babric', gameVersion, loaderVersion: loader.loader.version };
+}
+
+type OrnitheMeta = { installer?: { version: string; stable?: boolean; url: string }[] };
+
+function compareVersionsDesc(a: string, b: string): number {
+  const left = a.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const right = b.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (right[i] ?? 0) - (left[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Ornithe ships a Quilt-derived installer with a real command line, so the
+ * install downloads it from Ornithe's maven and lets it write the profile.
+ */
+export async function installOrnithe(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({ phase: 'loader', current: 0, total: 4, label: `Looking up Ornithe for ${gameVersion}` });
+  const meta = await fetchJson<OrnitheMeta>(ORNITHE_META);
+  const installers = [...(meta.installer ?? [])].sort((a, b) => compareVersionsDesc(a.version, b.version));
+  const installer = installers.find((entry) => entry.stable) ?? installers[0];
+  if (!installer) throw new Error('Ornithe does not publish an installer.');
+  log(`[prime] Ornithe installer ${installer.version}`);
+
+  // The installer builds on the vanilla version and its own gen2 profile.
+  progress({ phase: 'loader', current: 1, total: 4, label: 'Preparing vanilla files' });
+  await prepare(gameVersion, rootDir, (phase, current, total, label) =>
+    progress({ phase, current, total, label }),
+  );
+
+  const profilesPath = join(rootDir, 'launcher_profiles.json');
+  if (!existsSync(profilesPath)) {
+    await fs.writeFile(profilesPath, JSON.stringify({ profiles: {} }, null, 2));
+  }
+
+  const installerPath = join(rootDir, '.prime-cache', `ornithe-installer-${installer.version}.jar`);
+  await fs.mkdir(join(rootDir, '.prime-cache'), { recursive: true });
+  progress({ phase: 'loader', current: 2, total: 4, label: 'Downloading the Ornithe installer' });
+  if (!existsSync(installerPath)) await downloadFile(installer.url, installerPath);
+  log(`[prime] Ornithe installer ready (${installerPath})`);
+
+  const runtimes = (await discoverJava()).sort((a, b) => b.major - a.major);
+  const javaPath = runtimes.find((runtime) => runtime.major >= 17)?.path ?? runtimes[0]?.path;
+  if (!javaPath) throw new Error('The Ornithe installer needs a Java runtime and none is installed.');
+  log(`[prime] Ornithe installer Java: ${javaPath}`);
+
+  const versionsDir = join(rootDir, 'versions');
+  const before = new Set(await fs.readdir(versionsDir).catch(() => [] as string[]));
+  progress({ phase: 'loader', current: 3, total: 4, label: 'Running the Ornithe installer' });
+  await runJava(
+    javaPath,
+    [
+      '-jar',
+      installerPath,
+      'install',
+      'client',
+      gameVersion,
+      'Official',
+      'Fabric',
+      `--install-dir=${rootDir}`,
+    ],
+    rootDir,
+    log,
+    'Ornithe',
+  );
+
+  const after = await fs.readdir(versionsDir).catch(() => [] as string[]);
+  const versionId =
+    after.find((name) => !before.has(name) && /-ornithe-/.test(name)) ??
+    after.find((name) => /-ornithe-/.test(name) && name.includes(gameVersion));
+  if (!versionId) {
+    throw new Error('The Ornithe installer finished but produced no client profile.');
+  }
+  const profilePath = join(rootDir, 'versions', versionId, `${versionId}.json`);
+  if (!existsSync(profilePath)) {
+    await discardProfile(rootDir, versionId);
+    throw new Error('The Ornithe installer produced a version folder without a profile.');
+  }
+  const profile = JSON.parse(await fs.readFile(profilePath, 'utf8')) as VersionJson;
+  profile.primeLoader = 'ornithe';
+  await writeProfile(rootDir, profile);
+  log(`[prime] Ornithe profile ${versionId} inherits ${profile.inheritsFrom}, main ${profile.mainClass}`);
+
+  progress({ phase: 'loader', current: 4, total: 4, label: 'Downloading Ornithe libraries' });
+  try {
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  const loaderVersion = /^fabric-loader-([\d.]+)-/.exec(versionId)?.[1] ?? 'ornithe';
+  return { versionId, kind: 'ornithe', gameVersion, loaderVersion };
+}
+
+type NilLoaderRelease = {
+  tag_name: string;
+  assets?: { name: string; browser_download_url: string }[];
+};
+
+/**
+ * NilLoader is a JVM agent, not a profile provider: it publishes a jar and the
+ * exact maven coordinates Prism uses. The install writes a profile that puts
+ * that jar on the classpath and starts the game with -javaagent.
+ */
+export async function installNilLoader(
+  gameVersion: string,
+  rootDir: string,
+  progress: Progress,
+  log: Log,
+): Promise<LoaderInstall> {
+  progress({ phase: 'loader', current: 0, total: 3, label: 'Looking up NilLoader' });
+  const releases = await fetchJson<NilLoaderRelease[]>(`${NILLOADER_RELEASES}?limit=1`);
+  const release = Array.isArray(releases) ? releases[0] : null;
+  if (!release?.tag_name) throw new Error('NilLoader does not publish a release.');
+  const version = release.tag_name;
+  const versionId = `nilloader-${version}-${gameVersion}`;
+  log(`[prime] NilLoader ${version} for ${gameVersion} -> ${versionId}`);
+
+  // The agent wraps the vanilla game, so the vanilla profile comes first and
+  // supplies the main class this profile keeps.
+  progress({ phase: 'loader', current: 1, total: 3, label: 'Preparing vanilla files' });
+  await prepare(gameVersion, rootDir, (phase, current, total, label) =>
+    progress({ phase, current, total, label }),
+  );
+  const vanilla = await resolveVersion(gameVersion, rootDir);
+
+  const agentPath = `com/unascribed/nilloader/${version}/nilloader-${version}.jar`;
+  const profile: VersionJson = {
+    id: versionId,
+    inheritsFrom: gameVersion,
+    type: 'release',
+    releaseTime: new Date().toISOString(),
+    mainClass: vanilla.version.mainClass,
+    libraries: [{ name: `com.unascribed:nilloader:${version}`, url: NILLOADER_MAVEN }],
+    arguments: { jvm: [`-javaagent:\${library_directory}/${agentPath}`], game: [] },
+  };
+  profile.primeLoader = 'nilloader';
+  await writeProfile(rootDir, profile);
+
+  progress({ phase: 'loader', current: 2, total: 3, label: 'Downloading the NilLoader agent' });
+  try {
+    await prepare(versionId, rootDir, (phase, current, total, label) =>
+      progress({ phase, current, total, label }),
+    );
+  } catch (error) {
+    await discardProfile(rootDir, versionId);
+    throw error;
+  }
+
+  const agentFile = join(rootDir, 'libraries', agentPath);
+  if (!existsSync(agentFile)) {
+    await discardProfile(rootDir, versionId);
+    throw new Error('NilLoader published no agent jar at its maven coordinates.');
+  }
+
+  progress({ phase: 'loader', current: 3, total: 3, label: 'NilLoader installed' });
+  return { versionId, kind: 'nilloader', gameVersion, loaderVersion: version };
+}
+
 export async function installLoader(
   kind: LoaderKind,
   gameVersion: string,
@@ -654,5 +892,8 @@ export async function installLoader(
   if (kind === 'quilt') return installQuilt(resolved, rootDir, progress, log);
   if (kind === 'legacyfabric') return installLegacyFabric(resolved, rootDir, progress, log);
   if (kind === 'liteloader') return installLiteLoader(resolved, rootDir, progress, log);
+  if (kind === 'babric') return installBabric(resolved, rootDir, progress, log);
+  if (kind === 'ornithe') return installOrnithe(resolved, rootDir, progress, log);
+  if (kind === 'nilloader') return installNilLoader(resolved, rootDir, progress, log);
   return installNeoforge(resolved, rootDir, progress, log);
 }

@@ -29,7 +29,7 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
   { id: 'fabric', label: 'Fabric', blurb: 'Lightweight loader for modern mods.' },
   { id: 'forge', label: 'Forge', blurb: 'The classic loader for big modpacks.' },
   { id: 'neoforge', label: 'NeoForge', blurb: 'Forge fork maintained for newer versions.' },
-  { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for old beta versions.', planned: true },
+  { id: 'babric', label: 'Babric', blurb: 'Fabric toolchain for beta 1.7.3.' },
   { id: 'bta', label: 'BTA (Babric)', blurb: 'Better Than Adventure, built on Babric.', planned: true },
   { id: 'java-agent', label: 'Java Agent', blurb: 'Tweaks loaded through a JVM agent.', planned: true },
   { id: 'legacyfabric', label: 'Legacy Fabric', blurb: 'Fabric for 1.12 and older.' },
@@ -40,8 +40,8 @@ const LOADERS: { id: string; label: string; blurb: string; planned?: boolean }[]
     blurb: 'The original 1.6-era loader.',
     planned: true,
   },
-  { id: 'nilloader', label: 'NilLoader', blurb: 'Minimal bytecode patching loader.', planned: true },
-  { id: 'ornithe', label: 'Ornithe', blurb: 'Fabric for old versions with legacy mappings.', planned: true },
+  { id: 'nilloader', label: 'NilLoader', blurb: 'Runtime patches applied through a JVM agent.' },
+  { id: 'ornithe', label: 'Ornithe', blurb: 'Fabric for old versions with legacy mappings.' },
   { id: 'quilt', label: 'Quilt', blurb: 'Fabric-compatible loader with extra APIs.' },
   { id: 'rift', label: 'Rift', blurb: 'Loader for 1.13-era mods.', planned: true },
   {
@@ -63,7 +63,7 @@ const STEPS = ['Loader', 'Version', 'Content', 'Name', 'Include'] as const;
 const COPY = [
   {
     title: 'Pick a loader',
-    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric and LiteLoader work today - the greyed loaders are planned.',
+    sub: 'Vanilla, Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, Ornithe and NilLoader work today - the greyed loaders are planned.',
   },
   {
     title: 'Choose a version',
@@ -128,7 +128,10 @@ export function InstanceWizard({
     loader === 'neoforge' ||
     loader === 'quilt' ||
     loader === 'legacyfabric' ||
-    loader === 'liteloader';
+    loader === 'liteloader' ||
+    loader === 'babric' ||
+    loader === 'ornithe' ||
+    loader === 'nilloader';
   const canNext =
     !installing &&
     (step === 1 ? pending !== null : step === 3 ? instanceName.length > 0 : true);
@@ -217,7 +220,11 @@ export function InstanceWizard({
                       .filter(Boolean)
                       .join(' ')}
                     onClick={() => {
-                      if (!unavailable) setLoader(option.id as InstanceLoader);
+                      if (unavailable) return;
+                      setLoader(option.id as InstanceLoader);
+                      // Babric only exists for beta 1.7.3, which the release
+                      // filter would hide.
+                      if (option.id === 'babric') setChannel('all');
                     }}
                   >
                     <span className={`loader-mark ${option.id}`} aria-hidden="true" />
@@ -238,7 +245,7 @@ export function InstanceWizard({
             <p className="note setup-note">
               {needsInstall
                 ? `${loaderLabel} installs when you press Create instance at the end - progress shows right in the wizard.`
-                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric and LiteLoader are the working choices today.'}
+                : 'Greyed loaders are planned and cannot be installed yet. Fabric, Forge, NeoForge, Quilt, Legacy Fabric, LiteLoader, Babric, Ornithe and NilLoader are the working choices today.'}
             </p>
           </>
         ) : null}

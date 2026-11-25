@@ -12,7 +12,10 @@ export type LoaderKind =
   | 'quilt'
   | 'legacyfabric'
   | 'neoforge'
-  | 'liteloader';
+  | 'liteloader'
+  | 'babric'
+  | 'ornithe'
+  | 'nilloader';
 
 /** How an instance was started: the plain game, a mod loader, or a modpack. */
 export type InstanceLoader = 'vanilla' | LoaderKind | 'modpack';

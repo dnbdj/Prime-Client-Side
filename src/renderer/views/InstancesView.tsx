@@ -36,6 +36,9 @@ const LOADER_LABEL: Record<InstanceEntry['loader'], string> = {
   quilt: 'Quilt',
   legacyfabric: 'Legacy Fabric',
   liteloader: 'LiteLoader',
+  babric: 'Babric',
+  ornithe: 'Ornithe',
+  nilloader: 'NilLoader',
   modpack: 'Modpack',
 };
 

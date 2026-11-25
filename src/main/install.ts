@@ -40,7 +40,18 @@ export type VersionJson = {
   inheritsFrom?: string;
   releaseTime?: string;
   /** Set on profiles Prime installed itself. */
-  primeLoader?: 'fabric' | 'forge' | 'quilt' | 'legacyfabric' | 'neoforge' | 'liteloader';
+  /** Parent libraries a loader profile replaces with its own copies. */
+  primeDropLibraries?: string[];
+  primeLoader?:
+    | 'fabric'
+    | 'forge'
+    | 'quilt'
+    | 'legacyfabric'
+    | 'neoforge'
+    | 'liteloader'
+    | 'babric'
+    | 'ornithe'
+    | 'nilloader';
 };
 
 type Manifest = {
@@ -176,7 +187,17 @@ export type ResolvedVersion = {
 
 function mergeVersions(child: VersionJson, parent: VersionJson): VersionJson {
   const libraries = new Map<string, Library>();
-  for (const library of [...(parent.libraries ?? []), ...(child.libraries ?? [])]) {
+  // A loader that ships its own copy of a bundled library (Fabric's ASM on old
+  // betas, for example) lists the game's copy here so both never hit the
+  // classpath together.
+  const drops = child.primeDropLibraries ?? [];
+  const dropped = (name: string) =>
+    drops.some((entry) => (entry.endsWith(':*') ? name.startsWith(entry.slice(0, -1)) : entry === name));
+  for (const library of parent.libraries ?? []) {
+    if (dropped(library.name)) continue;
+    libraries.set(library.name, library);
+  }
+  for (const library of child.libraries ?? []) {
     // A loader may override a vanilla library; the child wins, like the vanilla launcher.
     libraries.set(library.name, library);
   }
@@ -189,6 +210,7 @@ function mergeVersions(child: VersionJson, parent: VersionJson): VersionJson {
     downloads: child.downloads ?? parent.downloads,
     javaVersion: child.javaVersion ?? parent.javaVersion,
     libraries: [...libraries.values()],
+    primeDropLibraries: child.primeDropLibraries,
     arguments: {
       game: [...(parent.arguments?.game ?? []), ...(child.arguments?.game ?? [])],
       jvm: [...(parent.arguments?.jvm ?? []), ...(child.arguments?.jvm ?? [])],
