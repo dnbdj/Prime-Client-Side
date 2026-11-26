@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { InstanceEntry, PrimeConfig, ProgressEvent, VersionSummary } from '../../shared/api';
+import { MoreIcon } from '../components/Icon';
 import { InstanceWizard } from '../components/InstanceWizard';
 import { timeAgo } from '../format';
 
@@ -19,7 +20,6 @@ type Props = {
   running: boolean;
   runningId: string | null;
   loadingVersions: boolean;
-  filter: string;
   onAddInstance: (entry: InstanceEntry, modPaths?: string[]) => void;
   onOpenInstance: (entry: InstanceEntry) => void;
   onPlay: (entry: InstanceEntry) => void;
@@ -56,7 +56,6 @@ export function InstancesView({
   running,
   runningId,
   loadingVersions,
-  filter,
   onAddInstance,
   onOpenInstance,
   onPlay,
@@ -65,30 +64,53 @@ export function InstancesView({
   onReloadVersions,
 }: Props) {
   const [creating, setCreating] = useState(false);
+  const [menu, setMenu] = useState<{ entry: InstanceEntry; x: number; y: number } | null>(null);
+
+  const openMenu = (event: ReactMouseEvent<HTMLButtonElement>, entry: InstanceEntry) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 190;
+    const height = 128;
+    const x = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const y =
+      rect.bottom + height + 8 > window.innerHeight ? rect.top - height - 6 : rect.bottom + 6;
+    setMenu({ entry, x, y });
+  };
+
+  const openFolder = async (entry: InstanceEntry) => {
+    const dir = await window.prime.instanceDir(entry.id, entry.versionId).catch(() => null);
+    if (dir) await window.prime.openPath(dir).catch(() => undefined);
+  };
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.vcard-menu') || target?.closest('.vcard-more')) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
 
   // With nothing installed yet, setup is the only useful thing to show.
   useEffect(() => {
     if (instances.length === 0) setCreating(true);
   }, [instances.length]);
 
-  const needle = filter.trim().toLowerCase();
-
-  const cards = useMemo(
-    () =>
-      needle
-        ? instances.filter((card) => {
-            const haystack = `${card.entry.name} ${card.entry.versionId}`.toLowerCase();
-            return haystack.includes(needle);
-          })
-        : instances,
-    [instances, needle],
-  );
-
   if (creating) {
     return (
       <InstanceWizard
         versions={versions}
-        filter={filter}
         loadingVersions={loadingVersions}
         progress={progress}
         percent={percent}
@@ -126,14 +148,12 @@ export function InstancesView({
 
         <div className="instance-grid">
           <div className="card-grid">
-            {cards.length === 0 ? (
+            {instances.length === 0 ? (
               <p className="empty">
-                {instances.length === 0
-                  ? 'No instances yet. Add one to start building your library.'
-                  : 'No instances match that filter.'}
+                No instances yet. Add one to start building your library.
               </p>
             ) : (
-              cards.map(({ entry, version, playedAt }) => {
+              instances.map(({ entry, version, playedAt }) => {
                 const active = version.id === config?.versionId;
                 const inGame = running && (runningId ? entry.id === runningId : active);
                 return (
@@ -147,6 +167,16 @@ export function InstancesView({
                       .filter(Boolean)
                       .join(' ')}
                   >
+                    <button
+                      type="button"
+                      className="vcard-more"
+                      aria-label={`Actions for ${entry.name}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.entry.id === entry.id}
+                      onClick={(event) => openMenu(event, entry)}
+                    >
+                      <MoreIcon />
+                    </button>
                     <button
                       type="button"
                       className="vcard-open"
@@ -201,6 +231,53 @@ export function InstancesView({
           </div>
         </div>
       </section>
+
+      {menu ? (
+        <div
+          className="vcard-menu"
+          role="menu"
+          aria-label={`Actions for ${menu.entry.name}`}
+          style={{ top: menu.y, left: menu.x }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="vcard-menu-item"
+            onClick={() => {
+              const entry = menu.entry;
+              setMenu(null);
+              onOpenInstance(entry);
+            }}
+          >
+            Open details
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="vcard-menu-item"
+            onClick={() => {
+              const entry = menu.entry;
+              setMenu(null);
+              void openFolder(entry);
+            }}
+          >
+            Open game folder
+          </button>
+          <span className="vcard-menu-sep" aria-hidden="true" />
+          <button
+            type="button"
+            role="menuitem"
+            className="vcard-menu-item danger-text"
+            onClick={() => {
+              const entry = menu.entry;
+              setMenu(null);
+              onDelete(entry);
+            }}
+          >
+            Delete instance
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

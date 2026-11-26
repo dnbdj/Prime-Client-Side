@@ -12,7 +12,6 @@ import { VersionMindMap } from './VersionMindMap';
 
 type Props = {
   versions: VersionSummary[];
-  filter: string;
   loadingVersions: boolean;
   progress: ProgressEvent | null;
   percent: number;
@@ -83,7 +82,6 @@ const COPY = [
 
 export function InstanceWizard({
   versions,
-  filter,
   loadingVersions,
   progress,
   percent,
@@ -95,6 +93,8 @@ export function InstanceWizard({
   const [furthest, setFurthest] = useState(0);
   const [loader, setLoader] = useState<InstanceLoader>('vanilla');
   const [channel, setChannel] = useState<'release' | 'all'>('release');
+  // The version filter lives here so the top bar search never narrows this list.
+  const [versionFilter, setVersionFilter] = useState('');
   const [path, setPath] = useState<string[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -138,7 +138,7 @@ export function InstanceWizard({
   }, [loader, btaVersions.length]);
 
   const options = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
+    const needle = versionFilter.trim().toLowerCase();
     // BTA numbers its own builds (bta-v8.0.1) and is in no Minecraft manifest.
     const source = loader === 'bta' ? btaVersions : versions;
     return source.filter((version) => {
@@ -146,7 +146,7 @@ export function InstanceWizard({
       if (loader !== 'bta' && channel === 'release' && version.type !== 'release') return false;
       return needle.length === 0 || version.id.toLowerCase().includes(needle);
     });
-  }, [btaVersions, channel, filter, loader, versions]);
+  }, [btaVersions, channel, loader, versionFilter, versions]);
 
   const loaderLabel = LOADERS.find((entry) => entry.id === loader)?.label ?? 'Vanilla';
   const instanceName = name.trim() || pending || '';
@@ -351,6 +351,15 @@ export function InstanceWizard({
                   All versions
                 </button>
               </div>
+              <label className="setup-version-filter">
+                <input
+                  value={versionFilter}
+                  spellCheck={false}
+                  placeholder="Filter versions"
+                  aria-label="Filter versions"
+                  onChange={(event) => setVersionFilter(event.target.value)}
+                />
+              </label>
               <span className="muted">{options.length} versions</span>
               <span className="picker-hint">
                 {pending ? `${pending} selected` : 'Open a branch, then pick a version'}

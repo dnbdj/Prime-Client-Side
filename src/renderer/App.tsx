@@ -9,6 +9,7 @@ import type {
   VersionSummary,
 } from '../shared/api';
 import { defaultInstance, INSTANCE_LOADERS } from '../shared/instances';
+import { GlobalSearch } from './components/GlobalSearch';
 import {
   HomeIcon,
   LogsIcon,
@@ -20,9 +21,10 @@ import {
 import { HomeView } from './views/HomeView';
 import { InstanceView } from './views/InstanceView';
 import { InstancesView, type InstanceCard } from './views/InstancesView';
+import { LogsView, type LogSession } from './views/LogsView';
 import { SettingsView } from './views/SettingsView';
 
-type View = 'home' | 'instances' | 'instance' | 'settings';
+type View = 'home' | 'instances' | 'instance' | 'settings' | 'logs';
 
 const NAV = [
   { id: 'home' as const, label: 'Home', Icon: HomeIcon },
@@ -35,6 +37,7 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   instances: { title: 'Instances', subtitle: 'Your Minecraft builds, ready to play' },
   instance: { title: 'Instance', subtitle: 'Mods, flags and everything about this build' },
   settings: { title: 'Settings', subtitle: 'Stored locally on this machine' },
+  logs: { title: 'Logs', subtitle: 'Every session from this run, kept side by side' },
 };
 
 const MAX_LOG_LINES = 600;
@@ -68,10 +71,19 @@ export function App() {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
-  const logsPanelRef = useRef<HTMLDivElement | null>(null);
-  const [logsOpen, setLogsOpen] = useState(false);
+  const [logSessions, setLogSessions] = useState<LogSession[]>([]);
+  const [logMeta, setLogMeta] = useState(() => ({
+    title: 'Launcher',
+    detail: 'Prime output',
+    startedAt: new Date().toISOString(),
+    endedAt: null as string | null,
+  }));
+  const [logTabs, setLogTabs] = useState<string[]>(['live']);
+  const [logTab, setLogTab] = useState('live');
   const [headerPhoto, setHeaderPhoto] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLDivElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<InstanceEntry | null>(null);
   const [appVersion, setAppVersion] = useState('');
@@ -86,6 +98,18 @@ export function App() {
       return next.length > MAX_LOG_LINES ? next.slice(next.length - MAX_LOG_LINES) : next;
     });
   }, []);
+
+  // A finished run is kept so the Logs page can show it beside the live one.
+  const archiveLive = useCallback(() => {
+    if (logs.length === 0) return;
+    const session: LogSession = {
+      id: `s-${Date.now().toString(36)}`,
+      ...logMeta,
+      endedAt: logMeta.endedAt ?? new Date().toISOString(),
+      lines: logs,
+    };
+    setLogSessions((current) => [session, ...current].slice(0, 12));
+  }, [logMeta, logs]);
 
   const patchConfig = useCallback(async (patch: Partial<PrimeConfig>) => {
     setConfig((current) => (current ? { ...current, ...patch } : current));
@@ -150,6 +174,7 @@ export function App() {
       appendLog(
         code === 0 ? '[prime] Session closed.' : `[prime] Session ended (exit ${code ?? 'unknown'}).`,
       );
+      setLogMeta((current) => ({ ...current, endedAt: new Date().toISOString() }));
     });
 
     return () => {
@@ -170,27 +195,22 @@ export function App() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [logs, view]);
 
-  useEffect(() => {
-    const node = logsPanelRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [logs, logsOpen]);
-
-  useEffect(() => {
-    if (!logsOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setLogsOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [logsOpen]);
-
   const handleLaunch = useCallback(
     async (versionId?: string, instanceId?: string) => {
       const target = versionId ?? config?.versionId;
       if (!target || busy || running) return;
       setBusy(true);
       setError(null);
+      archiveLive();
       setLogs([]);
+      const entry = config?.instances.find((candidate) => candidate.id === instanceId);
+      setLogMeta({
+        title: entry?.name ?? target,
+        detail: entry ? target : 'Prime output',
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+      });
+      setLogTab('live');
       setProgress({ phase: 'meta', current: 0, total: 1, label: 'Preparing launch' });
 
       const result = await window.prime.launch(target, instanceId);
@@ -209,7 +229,7 @@ export function App() {
         .then(setConfig)
         .catch(() => undefined);
     },
-    [busy, config?.versionId, running],
+    [archiveLive, busy, config?.instances, config?.versionId, running],
   );
 
   const handleStop = useCallback(async () => {
@@ -424,6 +444,15 @@ export function App() {
     };
   }, [accountMenu]);
 
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!searchRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [searchOpen]);
+
   useEffect(() => window.prime.onUpdateProgress(setUpdatePercent), []);
 
   useEffect(() => {
@@ -490,6 +519,50 @@ export function App() {
     return Math.min(100, Math.round((progress.current / progress.total) * 100));
   }, [progress]);
 
+  const liveSession = useMemo<LogSession>(
+    () => ({ id: 'live', ...logMeta, lines: logs }),
+    [logMeta, logs],
+  );
+
+  const openLogSession = useCallback((id: string) => {
+    setLogTabs((current) => (current.includes(id) ? current : [...current, id].slice(-12)));
+    setLogTab(id);
+  }, []);
+
+  const closeLogTab = useCallback((id: string) => {
+    if (id === 'live') return;
+    setLogTabs((current) => current.filter((tab) => tab !== id));
+    setLogTab((current) => (current === id ? 'live' : current));
+  }, []);
+
+  const clearLogs = useCallback(() => {
+    archiveLive();
+    setLogs([]);
+  }, [archiveLive]);
+
+  const pickSearchVersion = useCallback(
+    (version: VersionSummary) => {
+      void patchConfig({ versionId: version.id });
+      setView('instances');
+      setFilter('');
+      setSearchOpen(false);
+    },
+    [patchConfig],
+  );
+
+  const openSearchInstance = useCallback((entry: InstanceEntry) => {
+    setInstanceId(entry.id);
+    setView('instance');
+    setFilter('');
+    setSearchOpen(false);
+  }, []);
+
+  const navigateFromSearch = useCallback((next: View) => {
+    setView(next);
+    setFilter('');
+    setSearchOpen(false);
+  }, []);
+
   return (
     <div className="app">
       <aside className="rail">
@@ -514,9 +587,9 @@ export function App() {
             type="button"
             title="Logs"
             aria-label="Logs"
-            aria-pressed={logsOpen}
-            className={logsOpen ? 'rail-btn rail-logs active' : 'rail-btn rail-logs'}
-            onClick={() => setLogsOpen((open) => !open)}
+            aria-current={view === 'logs' ? 'page' : undefined}
+            className={view === 'logs' ? 'rail-btn rail-logs active' : 'rail-btn rail-logs'}
+            onClick={() => setView('logs')}
           >
             <LogsIcon />
             {running ? <span className="rail-dot" aria-hidden="true" /> : null}
@@ -547,18 +620,42 @@ export function App() {
             <span>{heading.subtitle}</span>
           </div>
 
-          <label className="search">
-            <SearchIcon />
-            <input
-              value={filter}
-              spellCheck={false}
-              placeholder="Search versions"
-              onChange={(event) => {
-                setFilter(event.target.value);
-                if (event.target.value.trim().length > 0) setView('instances');
-              }}
-            />
-          </label>
+          <div className="search-wrap" ref={searchRef}>
+            <label className="search">
+              <SearchIcon />
+              <input
+                value={filter}
+                spellCheck={false}
+                placeholder="Search"
+                aria-label="Search pages, instances, versions and Modrinth mods"
+                onFocus={() => {
+                  if (filter.trim().length > 0) setSearchOpen(true);
+                }}
+                onChange={(event) => {
+                  setFilter(event.target.value);
+                  setSearchOpen(event.target.value.trim().length > 0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchOpen(false);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+            {searchOpen && filter.trim().length > 0 ? (
+              <GlobalSearch
+                query={filter}
+                versions={versions}
+                instances={instances}
+                config={config}
+                onClose={() => setSearchOpen(false)}
+                onOpenInstance={openSearchInstance}
+                onPickVersion={pickSearchVersion}
+                onNavigate={navigateFromSearch}
+              />
+            ) : null}
+          </div>
 
           {update?.status === 'available' ? (
             <button
@@ -699,7 +796,6 @@ export function App() {
               running={running}
               runningId={runningId}
               loadingVersions={loadingVersions}
-              filter={filter}
               onAddInstance={(entry, modPaths) => void addInstance(entry, modPaths)}
               onOpenInstance={(entry) => {
                 setInstanceId(entry.id);
@@ -709,6 +805,18 @@ export function App() {
               onDelete={requestDelete}
               onStop={() => void handleStop()}
               onReloadVersions={loadVersions}
+            />
+          ) : view === 'logs' ? (
+            <LogsView
+              live={liveSession}
+              sessions={logSessions}
+              running={running}
+              tabs={logTabs}
+              activeId={logTab}
+              onActivate={openLogSession}
+              onCloseTab={closeLogTab}
+              onOpen={openLogSession}
+              onClear={clearLogs}
             />
           ) : (
             <SettingsView
@@ -722,51 +830,6 @@ export function App() {
           )}
         </main>
       </div>
-
-      {logsOpen ? (
-        <aside className="logs-panel" aria-label="Logs">
-          <div className="logs-head">
-            <div className="logs-title">
-              <h2>Logs</h2>
-              <span className={running ? 'chip green' : 'chip subtle'}>
-                {running ? 'Live' : 'Idle'}
-              </span>
-            </div>
-            <div className="logs-actions">
-              <span className="logs-count">
-                {logs.length ? `${logs.length} lines` : 'empty'}
-              </span>
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={logs.length === 0}
-                onClick={() => setLogs([])}
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                className="btn-ghost logs-close"
-                aria-label="Close logs"
-                onClick={() => setLogsOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-          <div className="logs-body" ref={logsPanelRef}>
-            {logs.length === 0 ? (
-              <p className="console-empty">Game and installer output appears here.</p>
-            ) : (
-              logs.map((line, index) => (
-                <div className="console-line" key={`${index}-${line.slice(0, 20)}`}>
-                  {line}
-                </div>
-              ))
-            )}
-          </div>
-        </aside>
-      ) : null}
 
       {confirmDelete ? (
         <div
