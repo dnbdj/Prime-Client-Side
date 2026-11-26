@@ -2572,6 +2572,36 @@ input[type='range']::-webkit-slider-thumb {
   gap: 8px;
 }
 
+/* One account per row: the status dot sits outside the bordered box. */
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-item .account-entry {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-status {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-left: 3px;
+}
+
+.account-status.online {
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.account-status.offline {
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
 .account-entry {
   display: flex;
   align-items: center;
@@ -2595,9 +2625,15 @@ input[type='range']::-webkit-slider-thumb {
 
 .account-add {
   display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.account-add-row {
+  display: flex;
   align-items: flex-end;
   gap: 10px;
-  margin-top: 14px;
 }
 
 .account-add .field {
@@ -2605,13 +2641,9 @@ input[type='range']::-webkit-slider-thumb {
   margin: 0;
 }
 
-.add-account {
-  position: relative;
-}
-
-.add-account .account-menu {
-  left: 0;
-  right: auto;
+/* In the panel's flow, so the account panel border stretches down to hold it. */
+.add-account-menu {
+  position: static;
   width: 264px;
 }
 

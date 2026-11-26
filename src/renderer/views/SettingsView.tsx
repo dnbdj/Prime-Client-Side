@@ -272,118 +272,129 @@ export function SettingsView({
             <div className="panel-body">
               <div className="account-list">
                 {accounts.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={
-                      entry.id === config?.activeAccountId ? 'account-entry on' : 'account-entry'
-                    }
-                  >
-                    <span className="avatar">
-                      {account && entry.uuid === account.uuid && account.skinUrl ? (
-                        <img src={account.skinUrl} alt="" />
-                      ) : (
-                        entry.name.slice(0, 1).toUpperCase()
-                      )}
-                    </span>
-                    <div className="account-identity">
-                      <strong>{entry.name}</strong>
-                      <span className="mono">
-                        {entry.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}
+                  <div key={entry.id} className="account-item">
+                    <span
+                      className={
+                        entry.kind === 'microsoft' ? 'account-status online' : 'account-status offline'
+                      }
+                      role="img"
+                      aria-label={entry.kind === 'microsoft' ? 'Online account' : 'Offline account'}
+                      title={entry.kind === 'microsoft' ? 'Online account' : 'Offline account'}
+                    />
+                    <div
+                      className={
+                        entry.id === config?.activeAccountId ? 'account-entry on' : 'account-entry'
+                      }
+                    >
+                      <span className="avatar">
+                        {account && entry.uuid === account.uuid && account.skinUrl ? (
+                          <img src={account.skinUrl} alt="" />
+                        ) : (
+                          entry.name.slice(0, 1).toUpperCase()
+                        )}
                       </span>
-                    </div>
-                    <div className="account-actions">
-                      {entry.id === config?.activeAccountId ? (
-                        <span className="chip subtle">In use</span>
-                      ) : (
+                      <div className="account-identity">
+                        <strong>{entry.name}</strong>
+                        <span className="mono">
+                          {entry.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}
+                        </span>
+                      </div>
+                      <div className="account-actions">
+                        {entry.id === config?.activeAccountId ? (
+                          <span className="chip subtle">In use</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => void useAccount(entry.id)}
+                          >
+                            Use
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="btn-ghost"
-                          onClick={() => void useAccount(entry.id)}
+                          className="btn-ghost danger-text"
+                          onClick={() => void removeAccount(entry.id)}
                         >
-                          Use
+                          Remove
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn-ghost danger-text"
-                        onClick={() => void removeAccount(entry.id)}
-                      >
-                        Remove
-                      </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
 
               <div className="account-add">
-                <div className="add-account">
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    aria-haspopup="menu"
-                    aria-expanded={addMenuOpen}
-                    onClick={() => setAddMenuOpen((open) => !open)}
-                  >
-                    Add <span aria-hidden="true">▾</span>
-                  </button>
-                  {addMenuOpen ? (
-                    <div className="account-menu add-account-menu" role="menu" aria-label="Add account">
+                <div className="account-add-row">
+                  <div className="add-account">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      aria-haspopup="menu"
+                      aria-expanded={addMenuOpen}
+                      onClick={() => setAddMenuOpen((open) => !open)}
+                    >
+                      Add <span aria-hidden="true">▾</span>
+                    </button>
+                  </div>
+                  {addKind === 'offline' ? (
+                    <div className="add-offline-form">
+                      <label className="field">
+                        <span>New offline account</span>
+                        <input
+                          value={newOfflineName}
+                          maxLength={16}
+                          spellCheck={false}
+                          placeholder="Steve"
+                          onChange={(event) => setNewOfflineName(event.target.value)}
+                        />
+                      </label>
                       <button
                         type="button"
-                        role="menuitem"
-                        className="account-menu-item"
-                        onClick={() => {
-                          setAddMenuOpen(false);
-                          setAddKind('offline');
-                        }}
+                        className="btn-ghost"
+                        disabled={newOfflineName.trim().length === 0}
+                        onClick={() => void addOfflineAccount()}
                       >
-                        <span className="account-menu-title">Offline</span>
-                        <span className="account-menu-note">
-                          A local name for singleplayer and offline servers
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="account-menu-item"
-                        disabled={authBusy}
-                        onClick={() => {
-                          setAddMenuOpen(false);
-                          setAddKind(null);
-                          void beginSignIn();
-                        }}
-                      >
-                        <span className="account-menu-title">Online</span>
-                        <span className="account-menu-note">
-                          Sign in with Microsoft for online servers
-                        </span>
-                      </button>
-                      <button type="button" role="menuitem" className="account-menu-item" disabled>
-                        <span className="account-menu-title">Other</span>
-                        <span className="account-menu-note">Coming soon</span>
+                        Add offline account
                       </button>
                     </div>
                   ) : null}
                 </div>
-                {addKind === 'offline' ? (
-                  <div className="add-offline-form">
-                    <label className="field">
-                      <span>New offline account</span>
-                      <input
-                        value={newOfflineName}
-                        maxLength={16}
-                        spellCheck={false}
-                        placeholder="Steve"
-                        onChange={(event) => setNewOfflineName(event.target.value)}
-                      />
-                    </label>
+                {addMenuOpen ? (
+                  <div className="account-menu add-account-menu" role="menu" aria-label="Add account">
                     <button
                       type="button"
-                      className="btn-ghost"
-                      disabled={newOfflineName.trim().length === 0}
-                      onClick={() => void addOfflineAccount()}
+                      role="menuitem"
+                      className="account-menu-item"
+                      onClick={() => {
+                        setAddMenuOpen(false);
+                        setAddKind('offline');
+                      }}
                     >
-                      Add offline account
+                      <span className="account-menu-title">Offline</span>
+                      <span className="account-menu-note">
+                        A local name for singleplayer and offline servers
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="account-menu-item"
+                      disabled={authBusy}
+                      onClick={() => {
+                        setAddMenuOpen(false);
+                        setAddKind(null);
+                        void beginSignIn();
+                      }}
+                    >
+                      <span className="account-menu-title">Online</span>
+                      <span className="account-menu-note">
+                        Sign in with Microsoft for online servers
+                      </span>
+                    </button>
+                    <button type="button" role="menuitem" className="account-menu-item" disabled>
+                      <span className="account-menu-title">Other</span>
+                      <span className="account-menu-note">Coming soon</span>
                     </button>
                   </div>
                 ) : null}
